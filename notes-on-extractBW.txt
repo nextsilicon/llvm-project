@@ -1,0 +1,49 @@
+
+Not affected by bit-width changes:
+./llvm/lib/Target/PowerPC/PPCTargetTransformInfo.cpp:          !extractBranchWeights(*BI, TrueWeight, FalseWeight))
+./llvm/lib/Transforms/Scalar/JumpThreading.cpp:  if (!extractBranchWeights(*CondBr, TrueWeight, FalseWeight))
+./llvm/lib/Transforms/Scalar/JumpThreading.cpp:    if (extractBranchWeights(*PredBr, PredTrueWeight, PredFalseWeight))
+./llvm/lib/Transforms/Instrumentation/PGOInstrumentation.cpp:      bool HasProf = extractBranchWeights(I, TC, FC);
+./llvm/lib/Transforms/Instrumentation/ControlHeightReduction.cpp:  if(!extractBranchWeights(*I, TrueWt, FalseWt))
+./llvm/lib/Transforms/Utils/MisExpect.cpp:  if (!extractBranchWeights(I, ExpectedWeights))
+./llvm/lib/Transforms/Utils/MisExpect.cpp:  if (!extractBranchWeights(I, RealWeights))
+./llvm/lib/Transforms/Utils/SimplifyCFG.cpp:    if (extractBranchWeights(*BI, TWeight, FWeight) &&
+./llvm/lib/Transforms/Utils/SimplifyCFG.cpp:    if (extractBranchWeights(*DomBI, TWeight, FWeight) &&
+./llvm/lib/Transforms/Utils/SimplifyCFG.cpp:      extractBranchWeights(*PBI, PredTrueWeight, PredFalseWeight);
+./llvm/lib/Transforms/Utils/SimplifyCFG.cpp:      extractBranchWeights(*BI, SuccTrueWeight, SuccFalseWeight);
+./llvm/lib/Transforms/Utils/SimplifyCFG.cpp:      extractBranchWeights(*PBI, PTWeight, PFWeight) &&
+./llvm/lib/Transforms/Utils/LoopUtils.cpp:  if (!extractBranchWeights(*ExitingBranch, LoopWeight, ExitWeight))
+./llvm/lib/Transforms/Utils/Local.cpp:          bool extractSucc = extractBranchWeights(*SI, Weights);
+./llvm/lib/Transforms/Utils/Local.cpp:      if(extractBranchWeights(*SI, DefWeight, CaseWeight)) {
+./llvm/lib/IR/Instructions.cpp:  if(!extractBranchWeights(SI, Weights))
+./llvm/lib/CodeGen/CodeGenPrepare.cpp:  if (extractBranchWeights(*SI, TrueWeight, FalseWeight)) {
+./llvm/lib/CodeGen/SelectOptimize.cpp:  if (extractBranchWeights(*SI, TrueWeight, FalseWeight)) {
+./llvm/lib/CodeGen/SelectOptimize.cpp:  if (extractBranchWeights(*SI, TrueWeight, FalseWeight)) {
+
+Might need some care of types:
+./llvm/lib/Transforms/Utils/LoopPeel.cpp:    if (!extractBranchWeights(*Term, Weights))
+./llvm/lib/Analysis/BranchProbabilityInfo.cpp:  extractBranchWeights(WeightsNode, Weights);
+./llvm/lib/Transforms/Instrumentation/IndirectCallPromotion.cpp:        LLVMContext::MD_prof,
+./llvm/lib/Transforms/IPO/SampleProfile.cpp:      TI->setMetadata(LLVMContext::MD_prof, MDB.createBranchWeights(Weights));
+./llvm/lib/Transforms/Utils/LoopUtils.cpp:      LLVMContext::MD_prof,
+./llvm/lib/Transforms/Utils/Local.cpp:          SI->setMetadata(LLVMContext::MD_prof,
+./llvm/lib/Transforms/Utils/Local.cpp:    NewCall->setMetadata(LLVMContext::MD_prof, NewWeights);
+./llvm/lib/IR/Instruction.cpp:  MDNode *ProfileData = getMetadata(LLVMContext::MD_prof);
+
+Needs updates for the weight computation:
+./llvm/lib/Transforms/Utils/LoopUnrollRuntime.cpp:  if (!extractBranchWeights(*LatchBR, TrueWeight, FalseWeight))
+./llvm/lib/CodeGen/CodeGenPrepare.cpp:      if (extractBranchWeights(*Br1, TrueWeight, FalseWeight)) {
+./llvm/lib/CodeGen/CodeGenPrepare.cpp:      if (extractBranchWeights(*Br1, TrueWeight, FalseWeight)) {
+./llvm/lib/CodeGen/SelectOptimize.cpp:  if (extractBranchWeights(*ASI.front(), TrueWeight, FalseWeight)) {
+./llvm/lib/Transforms/Utils/CodeExtractor.cpp:      LLVMContext::MD_prof,
+SimplifyCFG: All places where they read weights, fuse blocks, and then update weights. (calls to FitWeights)
+
+
+Are using the weights incorrectly:
+./llvm/lib/Transforms/Utils/LoopUtils.cpp:  Using it to estimate counts, which is not given when using them as probabilities.
+
+Not fixable, as they synthesize weights:
+./llvm/lib/Transforms/Instrumentation/ControlHeightReduction.cpp:  MergedBR->setMetadata(LLVMContext::MD_prof, MDB.createBranchWeights(Weights));
+./llvm/lib/Transforms/IPO/CrossDSOCFI.cpp:    BI->setMetadata(LLVMContext::MD_prof, VeryLikelyWeights);
+./llvm/lib/Transforms/IPO/SampleProfile.cpp:            I.setMetadata(LLVMContext::MD_prof, MDB.createBranchWeights(0));
+./llvm/lib/Transforms/Utils/GuardUtils.cpp:  CheckBI->setMetadata(LLVMContext::MD_prof,

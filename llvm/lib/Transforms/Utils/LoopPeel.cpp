@@ -661,6 +661,7 @@ static void initBranchWeights(DenseMap<Instruction *, WeightInfo> &WeightInfos,
       // Subtract exit weights on each iteration, distributed across all
       // fallthrough edges.
       double W = (double)Weight / (double)FallThroughWeights;
+      // TODO: carefull with that!
       SubWeights.push_back((uint32_t)(ExitWeights * W));
     }
 

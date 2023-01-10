@@ -1661,6 +1661,7 @@ void SampleProfileLoader::generateMDProfMetadata(Function &F) {
           else if (OverwriteExistingWeights)
             I.setMetadata(LLVMContext::MD_prof, nullptr);
         } else if (!isa<IntrinsicInst>(&I)) {
+          // TODO needs change
           I.setMetadata(LLVMContext::MD_prof,
                         MDB.createBranchWeights(
                             {static_cast<uint32_t>(BlockWeights[BB])}));
@@ -1712,6 +1713,7 @@ void SampleProfileLoader::generateMDProfMetadata(Function &F) {
       Edge E = std::make_pair(BB, Succ);
       uint64_t Weight = EdgeWeights[E];
       LLVM_DEBUG(dbgs() << "\t"; printEdgeWeight(dbgs(), E));
+      // TODO change this!
       // Use uint32_t saturated arithmetic to adjust the incoming weights,
       // if needed. Sample counts in profiles are 64-bit unsigned values,
       // but internally branch weights are expressed as 32-bit values.

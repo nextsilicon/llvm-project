@@ -2296,6 +2296,7 @@ static std::string getSimpleNodeName(const BasicBlock *Node) {
 void llvm::setProfMetadata(Module *M, Instruction *TI,
                            ArrayRef<uint64_t> EdgeCounts,
                            uint64_t MaxCount) {
+  // TODO needs changes!
   MDBuilder MDB(M->getContext());
   assert(MaxCount > 0 && "Bad max count");
   uint64_t Scale = calculateCountScale(MaxCount);
@@ -2319,6 +2320,7 @@ void llvm::setProfMetadata(Module *M, Instruction *TI,
     uint64_t WSum =
         std::accumulate(Weights.begin(), Weights.end(), (uint64_t)0,
                         [](uint64_t w1, uint64_t w2) { return w1 + w2; });
+    // TODO: this could in theory overflow. 
     uint64_t TotalCount =
         std::accumulate(EdgeCounts.begin(), EdgeCounts.end(), (uint64_t)0,
                         [](uint64_t c1, uint64_t c2) { return c1 + c2; });

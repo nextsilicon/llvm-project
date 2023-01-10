@@ -1,0 +1,40 @@
+
+Modified:
+./llvm/lib/Transforms/Scalar/JumpThreading.cpp:  MDNode *WeightsNode = TI->getMetadata(LLVMContext::MD_prof);
+./llvm/lib/Transforms/Scalar/LoopPredication.cpp:  MDNode *LatchProfileData = LatchTerm->getMetadata(LLVMContext::MD_prof);
+./llvm/lib/Transforms/Scalar/LoopPredication.cpp:    MDNode *ProfileData = Term->getMetadata(LLVMContext::MD_prof);
+./llvm/lib/Transforms/Instrumentation/ControlHeightReduction.cpp:  if (!checkMDProf(BI->getMetadata(LLVMContext::MD_prof),
+./llvm/lib/Transforms/Instrumentation/ControlHeightReduction.cpp:  if (!checkMDProf(SI->getMetadata(LLVMContext::MD_prof),
+./llvm/lib/Transforms/Utils/Local.cpp:        MDNode *MD = SI->getMetadata(LLVMContext::MD_prof);
+./llvm/lib/Transforms/Utils/Local.cpp:      MDNode *MD = SI->getMetadata(LLVMContext::MD_prof);
+./llvm/lib/Transforms/Utils/Local.cpp:  II->setMetadata(LLVMContext::MD_prof, CI->getMetadata(LLVMContext::MD_prof));
+./llvm/lib/IR/Instructions.cpp:  auto *ProfileData = getMetadata(LLVMContext::MD_prof);
+./llvm/lib/IR/Instructions.cpp:  if (MDNode *ProfileData = SI.getMetadata(LLVMContext::MD_prof))
+./llvm/lib/IR/Metadata.cpp:  return ::extractProfTotalWeight(getMetadata(LLVMContext::MD_prof), TotalVal);
+./llvm/lib/Analysis/BranchProbabilityInfo.cpp:  MDNode *WeightsNode = TI->getMetadata(LLVMContext::MD_prof);
+
+Might need further changes, given some changes in the accessors:
+./llvm/lib/IR/Instruction.cpp:  MDNode *ProfileData = getMetadata(LLVMContext::MD_prof);
+
+
+
+Not affected, but might profit from using the accesors:
+./llvm/include/llvm/Analysis/CFGPrinter.h:    MDNode *WeightsNode = TI->getMetadata(LLVMContext::MD_prof);
+./llvm/lib/Bitcode/Reader/BitcodeReader.cpp:    if (auto *MD = I.getMetadata(LLVMContext::MD_prof)) {
+
+No accessor needed (using the one implemented could change semantics):
+./llvm/lib/Transforms/Scalar/SROA.cpp:                                  SI.getMetadata(LLVMContext::MD_prof), &DTU);
+./llvm/lib/Transforms/Scalar/SROA.cpp:                              SI.getMetadata(LLVMContext::MD_prof), &DTU,
+./llvm/lib/IR/IRBuilder.cpp:    MDNode *Prof = MDFrom->getMetadata(LLVMContext::MD_prof);
+./llvm/lib/IR/Verifier.cpp:  if (MDNode *MD = I.getMetadata(LLVMContext::MD_prof))
+
+VP:
+./llvm/lib/ProfileData/InstrProf.cpp:  MDNode *MD = Inst.getMetadata(LLVMContext::MD_prof);
+
+Function Entry Counts:
+./llvm/lib/IR/Function.cpp:  MDNode *MD = getMetadata(LLVMContext::MD_prof);
+./llvm/lib/IR/Function.cpp:  if (MDNode *MD = getMetadata(LLVMContext::MD_prof))
+
+
+Needs further investigation
+./llvm/lib/Transforms/Utils/SimplifyCFG.cpp:  MDNode *MD = TI->getMetadata(LLVMContext::MD_prof);

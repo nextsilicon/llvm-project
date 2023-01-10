@@ -1099,6 +1099,7 @@ CodeGenFunction::createProfileWeights(ArrayRef<uint64_t> Weights) const {
   if (MaxWeight == 0)
     return nullptr;
 
+  // TODO this needs changes
   // Calculate how to scale down to 32-bits.
   uint64_t Scale = calculateWeightScale(MaxWeight);
 

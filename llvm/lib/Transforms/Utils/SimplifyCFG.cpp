@@ -1066,6 +1066,7 @@ static void GetBranchWeights(Instruction *TI,
                              SmallVectorImpl<uint64_t> &Weights) {
   MDNode *MD = TI->getMetadata(LLVMContext::MD_prof);
   assert(MD);
+  // TODO wrong type, how should we handle this?
   for (unsigned i = 1, e = MD->getNumOperands(); i < e; ++i) {
     ConstantInt *CI = mdconst::extract<ConstantInt>(MD->getOperand(i));
     Weights.push_back(CI->getValue().getZExtValue());
@@ -1156,6 +1157,7 @@ static void CloneInstructionsIntoPredecessorBlockAndUpdateSSAUses(
   }
 }
 
+// TODO this might be complicated to change
 bool SimplifyCFGOpt::PerformValueComparisonIntoPredecessorFolding(
     Instruction *TI, Value *&CV, Instruction *PTI, IRBuilder<> &Builder) {
   BasicBlock *BB = TI->getParent();
@@ -3566,6 +3568,7 @@ shouldFoldCondBranchesToCommonDestination(BranchInst *BI, BranchInst *PBI,
   return std::nullopt;
 }
 
+// TODO: this will also be difficult to handle
 static bool performBranchToCommonDestFolding(BranchInst *BI, BranchInst *PBI,
                                              DomTreeUpdater *DTU,
                                              MemorySSAUpdater *MSSAU,
