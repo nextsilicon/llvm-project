@@ -36,10 +36,23 @@ MDNode *MDBuilder::createFPMath(float Accuracy) {
 
 MDNode *MDBuilder::createBranchWeights(uint32_t TrueWeight,
                                        uint32_t FalseWeight) {
-  return createBranchWeights({TrueWeight, FalseWeight});
+  return createBranchWeightsOld(ArrayRef<uint32_t>({TrueWeight, FalseWeight}));
 }
 
-MDNode *MDBuilder::createBranchWeights(ArrayRef<uint32_t> Weights) {
+MDNode *MDBuilder::createBranchWeightsOld(ArrayRef<uint32_t> Weights) {
+  assert(Weights.size() >= 1 && "Need at least one branch weights!");
+
+  SmallVector<Metadata *, 4> Vals(Weights.size() + 1);
+  Vals[0] = createString("branch_weights");
+
+  Type *Int32Ty = Type::getInt32Ty(Context);
+  for (unsigned i = 0, e = Weights.size(); i != e; ++i)
+    Vals[i + 1] = createConstant(ConstantInt::get(Int32Ty, Weights[i]));
+
+  return MDNode::get(Context, Vals);
+}
+
+MDNode *MDBuilder::createBranchWeightsNew(ArrayRef<uint64_t> Weights) {
   assert(Weights.size() >= 1 && "Need at least one branch weights!");
 
   SmallVector<Metadata *, 4> Vals(Weights.size() + 1);

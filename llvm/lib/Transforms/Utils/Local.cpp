@@ -229,7 +229,7 @@ bool llvm::ConstantFoldTerminator(BasicBlock *BB, bool DeleteDeadConditions,
           Weights.pop_back();
           SI->setMetadata(LLVMContext::MD_prof,
                           MDBuilder(BB->getContext()).
-                          createBranchWeights(Weights));
+                          createBranchWeightsOld(Weights));
         }
         // Remove this entry.
         BasicBlock *ParentBB = SI->getParent();
@@ -2281,10 +2281,7 @@ CallInst *llvm::createCallMatchingInvoke(InvokeInst *II) {
   if (NewCall->extractProfTotalWeight(TotalWeight)) {
     // Set the total weight if it fits into i32, otherwise reset.
     MDBuilder MDB(NewCall->getContext());
-    auto NewWeights = uint32_t(TotalWeight) != TotalWeight
-                          ? nullptr
-                          : MDB.createBranchWeights({uint32_t(TotalWeight)});
-    NewCall->setMetadata(LLVMContext::MD_prof, NewWeights);
+    NewCall->setMetadata(LLVMContext::MD_prof, MDB.createBranchWeightsNew(TotalWeight));
   }
 
   return NewCall;

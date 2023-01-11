@@ -61,8 +61,12 @@ public:
   /// Return metadata containing two branch weights.
   MDNode *createBranchWeights(uint32_t TrueWeight, uint32_t FalseWeight);
 
+  /// TODO: this is here to hunt down potentially dangerouse calls to the set
   /// Return metadata containing a number of branch weights.
-  MDNode *createBranchWeights(ArrayRef<uint32_t> Weights);
+  MDNode *createBranchWeightsOld(ArrayRef<uint32_t> Weights);
+  
+  /// Return metadata containing a number of branch weights.
+  MDNode *createBranchWeightsNew(ArrayRef<uint64_t> Weights);
 
   /// Return metadata specifying that a branch or switch is unpredictable.
   MDNode *createUnpredictable();

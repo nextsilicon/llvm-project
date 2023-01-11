@@ -976,7 +976,7 @@ TEST(InstructionsTest, SwitchInstProfUpdateWrapper) {
   SI->addCase(ConstantInt::get(Int32Ty, 1), BB1.get());
   SI->addCase(ConstantInt::get(Int32Ty, 2), BB2.get());
   SI->setMetadata(LLVMContext::MD_prof,
-                  MDBuilder(C).createBranchWeights({ 9, 1, 22 }));
+                  MDBuilder(C).createBranchWeightsNew({ 9, 1, 22 }));
 
   {
     SwitchInstProfUpdateWrapper SIW(*SI);

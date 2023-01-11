@@ -260,7 +260,7 @@ CallBase &llvm::pgo::promoteIndirectCall(CallBase &CB, Function *DirectCallee,
     MDBuilder MDB(NewInst.getContext());
     NewInst.setMetadata(
         LLVMContext::MD_prof,
-        MDB.createBranchWeights({static_cast<uint32_t>(Count)}));
+        MDB.createBranchWeights(ArrayRef(static_cast<uint32_t>(Count))));
   }
 
   using namespace ore;

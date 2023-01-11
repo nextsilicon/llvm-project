@@ -1099,6 +1099,8 @@ CodeGenFunction::createProfileWeights(ArrayRef<uint64_t> Weights) const {
   if (MaxWeight == 0)
     return nullptr;
 
+  // TODO we need an overflow check here!
+
   // TODO this needs changes
   // Calculate how to scale down to 32-bits.
   uint64_t Scale = calculateWeightScale(MaxWeight);
@@ -1109,7 +1111,7 @@ CodeGenFunction::createProfileWeights(ArrayRef<uint64_t> Weights) const {
     ScaledWeights.push_back(scaleBranchWeight(W, Scale));
 
   llvm::MDBuilder MDHelper(CGM.getLLVMContext());
-  return MDHelper.createBranchWeights(ScaledWeights);
+  return MDHelper.createBranchWeightsOld(ScaledWeights);
 }
 
 llvm::MDNode *

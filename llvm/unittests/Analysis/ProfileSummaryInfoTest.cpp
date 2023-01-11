@@ -250,7 +250,7 @@ TEST_F(ProfileSummaryInfoTest, InstrProf) {
   // Test that adding an MD_prof metadata with a hot count on CS2 does not
   // change its hotness as it has no effect in instrumented profiling.
   MDBuilder MDB(M->getContext());
-  CI2->setMetadata(llvm::LLVMContext::MD_prof, MDB.createBranchWeights({400}));
+  CI2->setMetadata(llvm::LLVMContext::MD_prof, MDB.createBranchWeights(ArrayRef(static_cast<uint32_t>(400))));
   EXPECT_FALSE(PSI.isHotCallSite(CS2, &BFI));
 
   EXPECT_TRUE(PSI.isFunctionHotInCallGraphNthPercentile(990000, F, BFI));
@@ -350,7 +350,7 @@ TEST_F(ProfileSummaryInfoTest, SampleProf) {
 
   // Test that CS2 is considered hot when it gets an MD_prof metadata with
   // weights that exceed the hot count threshold.
-  CI2->setMetadata(llvm::LLVMContext::MD_prof, MDB.createBranchWeights({400}));
+  CI2->setMetadata(llvm::LLVMContext::MD_prof, MDB.createBranchWeights(ArrayRef(static_cast<uint32_t>(400))));
   EXPECT_TRUE(PSI.isHotCallSite(CS2, &BFI));
 
   EXPECT_TRUE(PSI.isFunctionHotInCallGraphNthPercentile(990000, F, BFI));

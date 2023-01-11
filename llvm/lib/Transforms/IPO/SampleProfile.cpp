@@ -1664,7 +1664,7 @@ void SampleProfileLoader::generateMDProfMetadata(Function &F) {
           // TODO needs change
           I.setMetadata(LLVMContext::MD_prof,
                         MDB.createBranchWeights(
-                            {static_cast<uint32_t>(BlockWeights[BB])}));
+                            ArrayRef(static_cast<uint32_t>(BlockWeights[BB]))));
         }
       }
     } else if (OverwriteExistingWeights || ProfileSampleBlockAccurate) {
@@ -1675,7 +1675,7 @@ void SampleProfileLoader::generateMDProfMetadata(Function &F) {
           if (cast<CallBase>(I).isIndirectCall())
             I.setMetadata(LLVMContext::MD_prof, nullptr);
           else
-            I.setMetadata(LLVMContext::MD_prof, MDB.createBranchWeights(0));
+            I.setMetadata(LLVMContext::MD_prof, MDB.createBranchWeights(ArrayRef<uint32_t>(0)));
         }
       }
     }

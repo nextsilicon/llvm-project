@@ -1,0 +1,43 @@
+./llvm/lib/Transforms/Instrumentation/PGOInstrumentation.cpp:  TI->setMetadata(LLVMContext::MD_prof, MDB.createBranchWeights(Weights));
+./llvm/lib/Transforms/Instrumentation/IndirectCallPromotion.cpp:  MDNode *BranchWeights = MDB.createBranchWeights(
+./llvm/lib/Transforms/Instrumentation/IndirectCallPromotion.cpp:        MDB.createBranchWeights(ArrayRef(static_cast<uint32_t>(Count))));
+./llvm/lib/Transforms/Instrumentation/HWAddressSanitizer.cpp:                                MDBuilder(*C).createBranchWeights(1, 100000));
+./llvm/lib/Transforms/Instrumentation/HWAddressSanitizer.cpp:                                MDBuilder(*C).createBranchWeights(1, 100000));
+./llvm/lib/Transforms/Instrumentation/HWAddressSanitizer.cpp:                            MDBuilder(*C).createBranchWeights(1, 100000),
+./llvm/lib/Transforms/Instrumentation/HWAddressSanitizer.cpp:                            MDBuilder(*C).createBranchWeights(1, 100000),
+./llvm/lib/Transforms/Instrumentation/AddressSanitizer.cpp:        Cmp, InsertBefore, false, MDBuilder(*C).createBranchWeights(1, 100000));
+./llvm/lib/Transforms/Instrumentation/KCFI.cpp:      MDBuilder(Ctx).createBranchWeights(1, (1U << 20) - 1);
+./llvm/lib/Transforms/Instrumentation/ControlHeightReduction.cpp:  MergedBR->setMetadata(LLVMContext::MD_prof, MDB.createBranchWeights(Weights));
+./llvm/lib/Transforms/IPO/CrossDSOCFI.cpp:    MDBuilder(M.getContext()).createBranchWeights((1U << 20) - 1, 1);
+./llvm/lib/Transforms/IPO/WholeProgramDevirt.cpp:            MDBuilder(M.getContext()).createBranchWeights((1U << 20) - 1, 1);
+./llvm/lib/Transforms/IPO/SampleProfile.cpp:                        MDB.createBranchWeights(
+./llvm/lib/Transforms/IPO/SampleProfile.cpp:            I.setMetadata(LLVMContext::MD_prof, MDB.createBranchWeights(ArrayRef<uint32_t>(0)));
+./llvm/lib/Transforms/IPO/SampleProfile.cpp:      TI->setMetadata(LLVMContext::MD_prof, MDB.createBranchWeights(Weights));
+./llvm/lib/Transforms/Utils/LoopPeel.cpp:                    MDB.createBranchWeights(Info.Weights));
+./llvm/lib/Transforms/Utils/LoopPeel.cpp:                    MDB.createBranchWeights(Info.Weights));
+./llvm/lib/Transforms/Utils/LoopUnrollRuntime.cpp:    HeaderIdx ? MDB.createBranchWeights(ExitWeight, BackEdgeWeight)
+./llvm/lib/Transforms/Utils/LoopUnrollRuntime.cpp:                : MDB.createBranchWeights(BackEdgeWeight, ExitWeight);
+./llvm/lib/Transforms/Utils/SimplifyCFG.cpp:    N = MDBuilder(SI->getParent()->getContext()).createBranchWeights(Weights);
+./llvm/lib/Transforms/Utils/SimplifyCFG.cpp:            .createBranchWeights(TrueWeight, FalseWeight);
+./llvm/lib/Transforms/Utils/CodeExtractor.cpp:      MDBuilder(TI->getContext()).createBranchWeights(BranchWeights));
+./llvm/lib/Transforms/Utils/GuardUtils.cpp:                       MDB.createBranchWeights(PredicatePassBranchWeight, 1));
+./llvm/lib/Transforms/Utils/LoopUtils.cpp:      MDB.createBranchWeights(BackedgeTakenWeight, LatchExitWeight));
+./llvm/lib/Transforms/Utils/LibCallsShrinkWrap.cpp:      MDBuilder(CI->getContext()).createBranchWeights(1, 2000);
+./llvm/lib/Transforms/Utils/Local.cpp:                          createBranchWeightsOld(Weights));
+./llvm/lib/Transforms/Utils/Local.cpp:                               .createBranchWeights(CaseWeight, DefWeight));
+./llvm/lib/Transforms/Utils/Local.cpp:    NewCall->setMetadata(LLVMContext::MD_prof, MDB.createBranchWeightsNew(TotalWeight));
+./llvm/lib/IR/Instructions.cpp:  return MDBuilder(SI.getParent()->getContext()).createBranchWeights(*Weights);
+./llvm/lib/IR/MDBuilder.cpp:MDNode *MDBuilder::createBranchWeights(uint32_t TrueWeight,
+./llvm/lib/IR/MDBuilder.cpp:  return createBranchWeightsOld(ArrayRef<uint32_t>({TrueWeight, FalseWeight}));
+./llvm/lib/IR/MDBuilder.cpp:MDNode *MDBuilder::createBranchWeightsOld(ArrayRef<uint32_t> Weights) {
+./llvm/lib/IR/MDBuilder.cpp:MDNode *MDBuilder::createBranchWeightsNew(ArrayRef<uint64_t> Weights) {
+./llvm/lib/CodeGen/CodeGenPrepare.cpp:                             .createBranchWeights(TrueWeight, FalseWeight));
+./llvm/lib/CodeGen/CodeGenPrepare.cpp:                             .createBranchWeights(TrueWeight, FalseWeight));
+./llvm/lib/CodeGen/CodeGenPrepare.cpp:                             .createBranchWeights(TrueWeight, FalseWeight));
+./llvm/lib/CodeGen/CodeGenPrepare.cpp:                             .createBranchWeights(TrueWeight, FalseWeight));
+./llvm/lib/CodeGen/StackProtector.cpp:                            .createBranchWeights(FailureProb.getNumerator(),
+./llvm/lib/CodeGen/SafeStack.cpp:                        .createBranchWeights(SuccessProb.getNumerator(),
+./notes-on-extractBW.txt:./llvm/lib/Transforms/IPO/SampleProfile.cpp:      TI->setMetadata(LLVMContext::MD_prof, MDB.createBranchWeights(Weights));
+./notes-on-extractBW.txt:./llvm/lib/Transforms/Instrumentation/ControlHeightReduction.cpp:  MergedBR->setMetadata(LLVMContext::MD_prof, MDB.createBranchWeights(Weights));
+./notes-on-extractBW.txt:./llvm/lib/Transforms/IPO/SampleProfile.cpp:            I.setMetadata(LLVMContext::MD_prof, MDB.createBranchWeights(0));
+./mlir/lib/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.cpp:      .createBranchWeights(weightValues);

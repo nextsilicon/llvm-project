@@ -302,7 +302,7 @@ static void updatePredecessorProfileMetadata(PHINode *PN, BasicBlock *BB) {
     }
     PredBr->setMetadata(LLVMContext::MD_prof,
                         MDBuilder(PredBr->getParent()->getContext())
-                            .createBranchWeights(Weights));
+                            .createBranchWeightsOld(Weights));
   }
 }
 
@@ -2616,7 +2616,7 @@ void JumpThreadingPass::updateBlockFreqAndEdgeWeight(BasicBlock *PredBB,
     auto TI = BB->getTerminator();
     TI->setMetadata(
         LLVMContext::MD_prof,
-        MDBuilder(TI->getParent()->getContext()).createBranchWeights(Weights));
+        MDBuilder(TI->getParent()->getContext()).createBranchWeightsOld(Weights));
   }
 }
 

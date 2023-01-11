@@ -97,6 +97,7 @@ static bool handleSwitchExpect(SwitchInst &SI) {
   std::tie(LikelyBranchWeightVal, UnlikelyBranchWeightVal) =
       getBranchWeight(Fn->getIntrinsicID(), CI, n + 1);
 
+  // TODO: changing this has interaction with extract
   SmallVector<uint32_t, 16> Weights(n + 1, UnlikelyBranchWeightVal);
 
   uint64_t Index = (Case == *SI.case_default()) ? 0 : Case.getCaseIndex() + 1;
@@ -107,7 +108,7 @@ static bool handleSwitchExpect(SwitchInst &SI) {
   SI.setCondition(ArgValue);
 
   SI.setMetadata(LLVMContext::MD_prof,
-                 MDBuilder(CI->getContext()).createBranchWeights(Weights));
+                 MDBuilder(CI->getContext()).createBranchWeightsOld(Weights));
 
   return true;
 }
