@@ -5,7 +5,7 @@
 //
 
 // CHECK: declare void @return_void()
-llvm.func @return_void() -> !llvm.void
+llvm.func @return_void()
 // CHECK: declare half @return_half()
 llvm.func @return_half() -> f16
 // CHECK: declare bfloat @return_bfloat()
@@ -28,7 +28,7 @@ llvm.func @return_x86_mmx() -> !llvm.x86_mmx
 //
 
 // CHECK: declare void @f_void_i32(i32)
-llvm.func @f_void_i32(i32) -> !llvm.void
+llvm.func @f_void_i32(i32)
 // CHECK: declare i32 @f_i32_empty()
 llvm.func @f_i32_empty() -> i32
 // CHECK: declare i32 @f_i32_half_bfloat_float_double(half, bfloat, float, double)

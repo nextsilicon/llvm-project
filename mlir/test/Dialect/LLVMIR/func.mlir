@@ -256,8 +256,8 @@ module {
 // -----
 
 module {
-  // expected-error@+1 {{cannot attach result attributes to functions with a void return}}
-  llvm.func @variadic_def() -> (!llvm.void {llvm.noundef})
+  // expected-error@+1 {{void return type should not be passed explicitly}}
+  llvm.func @variadic_def() -> (!llvm.void)
 }
 
 // -----

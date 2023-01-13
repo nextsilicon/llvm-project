@@ -2044,7 +2044,16 @@ buildLLVMFunctionType(OpAsmParser &parser, SMLoc loc, ArrayRef<Type> inputs,
     llvmInputs.push_back(t);
   }
 
-  // No output is denoted as "void" in LLVM type system.
+  // The void return type is an internal implementation detail that should not
+  // be expressed explicitly on the IR. This is symmetric to the printer, which
+  // does not print the implicit void return type.
+  if (!outputs.empty() && outputs.front().isa<LLVMVoidType>()) {
+    parser.emitError(loc, "failed to construct function type: void return type "
+                          "should not be passed explicitly");
+    return {};
+  }
+
+  // Set implicit void type to represent no return value.
   Type llvmOutput =
       outputs.empty() ? LLVMVoidType::get(b.getContext()) : outputs.front();
   if (!isCompatibleType(llvmOutput)) {
