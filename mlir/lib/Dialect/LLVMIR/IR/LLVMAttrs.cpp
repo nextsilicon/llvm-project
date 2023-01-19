@@ -12,11 +12,15 @@
 
 #include "mlir/Dialect/LLVMIR/LLVMAttrs.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
+#include "mlir/IR/Attributes.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectImplementation.h"
+#include "mlir/IR/OpDefinition.h"
+#include "mlir/Support/LogicalResult.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/BinaryFormat/Dwarf.h"
+#include <cstdint>
 #include <optional>
 
 using namespace mlir;
@@ -31,6 +35,7 @@ using namespace mlir::LLVM;
 //===----------------------------------------------------------------------===//
 
 void LLVMDialect::registerAttributes() {
+  addAttributes<DICompositeTypeMutAttr>();
   addAttributes<
 #define GET_ATTRDEF_LIST
 #include "mlir/Dialect/LLVMIR/LLVMOpsAttrDefs.cpp.inc"
@@ -72,7 +77,8 @@ bool DILocalScopeAttr::classof(Attribute attr) {
 
 bool DITypeAttr::classof(Attribute attr) {
   return llvm::isa<DIVoidResultTypeAttr, DIBasicTypeAttr, DICompositeTypeAttr,
-                   DIDerivedTypeAttr, DISubroutineTypeAttr>(attr);
+                   DICompositeTypeMutAttr, DIDerivedTypeAttr,
+                   DISubroutineTypeAttr>(attr);
 }
 
 //===----------------------------------------------------------------------===//
@@ -90,6 +96,209 @@ DISubroutineTypeAttr::verify(function_ref<InFlightDiagnostic()> emitError,
       }))
     return emitError() << "expected subroutine to have non-void argument types";
   return success();
+}
+
+//===----------------------------------------------------------------------===//
+// DICompositeTypeMutAttr
+//===----------------------------------------------------------------------===//
+
+namespace mlir {
+namespace LLVM {
+namespace detail {
+// TODO move to LLVMAttersDetail.h?
+class DICompositeTypeMutAttrStorage : public AttributeStorage {
+public:
+  using KeyTy = std::tuple<int64_t, StringAttr, DITypeAttr>;
+
+  DICompositeTypeMutAttrStorage(int64_t id, StringAttr name,
+                                DITypeAttr baseType)
+      : id(id), name(name), baseType(baseType) {}
+
+  KeyTy getAsKey() const { return KeyTy(id, name, baseType); }
+
+  static llvm::hash_code hashKey(const KeyTy &key) {
+    return llvm::hash_combine(std::get<0>(key), std::get<1>(key),
+                              std::get<2>(key));
+  }
+
+  static DICompositeTypeMutAttrStorage *
+  construct(AttributeStorageAllocator &allocator, const KeyTy &key) {
+    int64_t id = std::get<0>(key);
+    StringAttr name = std::get<1>(key);
+    DITypeAttr baseType = std::get<2>(key);
+    return new (allocator.allocate<DICompositeTypeMutAttrStorage>())
+        DICompositeTypeMutAttrStorage(id, name, baseType);
+  }
+
+  LogicalResult mutate(AttributeStorageAllocator &allocator,
+                       ArrayRef<DITypeAttr> elements) {
+    if (isMutated)
+      return failure();
+
+    ArrayRef<DITypeAttr> allocated = allocator.copyInto(elements);
+    elementsPtr = allocated.data();
+    elementsSize = allocated.size();
+    isMutated = true;
+    return success();
+  }
+
+  bool operator==(const KeyTy &other) const { return getAsKey() == other; }
+
+  /// Returns the list of types contained in an identified struct.
+  ArrayRef<DITypeAttr> getElements() const {
+    return ArrayRef<DITypeAttr>(elementsPtr, elementsSize);
+  }
+
+  // TODO make stuff blow private
+  int64_t id;
+  StringAttr name;
+  DITypeAttr baseType;
+
+  bool isMutated = false;
+  const DITypeAttr *elementsPtr = nullptr;
+  size_t elementsSize = 0;
+};
+} // namespace detail
+} // namespace LLVM
+} // namespace mlir
+
+DICompositeTypeMutAttr DICompositeTypeMutAttr::get(MLIRContext *context,
+                                                   int64_t id, StringAttr name,
+                                                   DITypeAttr baseType) {
+  return Base::get(context, id, name, baseType);
+}
+
+int64_t DICompositeTypeMutAttr::getID() const { return getImpl()->id; }
+
+StringAttr DICompositeTypeMutAttr::getName() const { return getImpl()->name; }
+
+DITypeAttr DICompositeTypeMutAttr::getBaseType() const {
+  return getImpl()->baseType;
+}
+
+LogicalResult
+DICompositeTypeMutAttr::setElements(ArrayRef<DITypeAttr> elements) {
+  return Base::mutate(elements);
+}
+
+ArrayRef<DITypeAttr> DICompositeTypeMutAttr::getElements() const {
+  return getImpl()->getElements();
+}
+
+Attribute DICompositeTypeMutAttr::parse(AsmParser &parser, Type type) {
+  if (parser.parseLess())
+    return {};
+
+  // A helper function to parse a composite type parameter.
+  auto parseParameter =
+      [&](StringRef name, StringRef type, bool &seen,
+          function_ref<ParseResult()> parseFn) -> ParseResult {
+    if (seen) {
+      return parser.emitError(parser.getCurrentLocation())
+             << "struct has duplicate parameter '" << name << "'";
+    }
+    if (failed(parseFn())) {
+      return parser.emitError(parser.getCurrentLocation())
+             << "failed to parse LLVM_DICompositeTypeAttr parameter '" << name
+             << "' which is to be a '" << type << "'";
+    }
+    seen = true;
+    return success();
+  };
+
+  std::pair<int64_t, bool> id = {0, false};
+  std::pair<StringAttr, bool> name = {nullptr, false};
+  std::pair<DITypeAttr, bool> baseType = {nullptr, false};
+  std::pair<SmallVector<DITypeAttr>, bool> elements = {{}, false};
+  do {
+    std::string keyword;
+    if (failed(parser.parseKeywordOrString(&keyword))) {
+      parser.emitError(parser.getCurrentLocation())
+          << "expected a parameter name in struct";
+      return {};
+    }
+    if (parser.parseEqual())
+      return {};
+
+    if (keyword == "id") {
+      if (failed(parseParameter(keyword, "int64_t", id.second, [&]() {
+            return parser.parseInteger(id.first);
+          })))
+        return {};
+    } else if (keyword == "name") {
+      if (failed(parseParameter(keyword, "StringAttr", name.second, [&]() {
+            return parser.parseAttribute(name.first);
+          })))
+        return {};
+    } else if (keyword == "base_type") {
+      if (failed(parseParameter(keyword, "DITypeAttr", baseType.second, [&]() {
+            return parser.parseAttribute(baseType.first);
+          })))
+        return {};
+    } else if (keyword == "elements") {
+      if (failed(parseParameter(
+              keyword, "::llvm::ArrayRef<DINodeAttr>", elements.second, [&]() {
+                return parser.parseCommaSeparatedList([&]() {
+                  return parser.parseAttribute(elements.first.emplace_back());
+                });
+              })))
+        return {};
+    } else {
+      parser.emitError(parser.getCurrentLocation())
+          << "expected a parameter name in struct";
+      return {};
+    }
+  } while (succeeded(parser.parseOptionalComma()));
+
+  if (!id.second) {
+    parser.emitError(parser.getCurrentLocation())
+        << "struct is missing required parameter 'id'";
+    return {};
+  }
+  if (!name.second) {
+    parser.emitError(parser.getCurrentLocation())
+        << "struct is missing required parameter 'name'";
+    return {};
+  }
+
+  if (parser.parseGreater())
+    return {};
+
+  DICompositeTypeMutAttr attr =
+      get(parser.getContext(), id.first, name.first, baseType.first);
+  if (elements.second)
+    if (failed(attr.setElements(elements.first))) {
+      parser.emitError(parser.getCurrentLocation())
+          << "cannot mutate 'elements' twice";
+      return {};
+    }
+  return attr;
+}
+
+void DICompositeTypeMutAttr::print(AsmPrinter &os) const {
+
+  thread_local SetVector<TypeID> knownAttributes;
+  // TODO add stack size assertion?
+
+  os << DICompositeTypeMutAttr::getMnemonic() << "<";
+  os << "id = " << getID();
+  os << ", name = ";
+  os.printStrippedAttrOrType(getName());
+  if (getBaseType()) {
+    os << ", base_type = ";
+    os.printStrippedAttrOrType(getBaseType());
+  }
+  if (getImpl()->isMutated && knownAttributes.count(getTypeID()) == 0) {
+    knownAttributes.insert(getTypeID());
+
+    os << ", elements = ";
+    llvm::interleaveComma(getElements(), os, [&](auto typeAttr) {
+      os.printStrippedAttrOrType(typeAttr);
+    });
+
+    knownAttributes.pop_back();
+  }
+  os << ">";
 }
 
 //===----------------------------------------------------------------------===//
@@ -285,4 +494,33 @@ bool MemoryEffectsAttr::isReadWrite() {
   if (this->getOther() != ModRefInfo::ModRef)
     return false;
   return true;
+}
+
+//===----------------------------------------------------------------------===//
+// LLVMDialect
+//===----------------------------------------------------------------------===//
+
+Attribute LLVMDialect::parseAttribute(DialectAsmParser &parser,
+                                      Type type) const {
+  StringRef mnemonic;
+  Attribute attr;
+  OptionalParseResult result =
+      generatedAttributeParser(parser, &mnemonic, type, attr);
+  if (result.has_value())
+    return attr;
+
+  if (mnemonic == DICompositeTypeMutAttr::getMnemonic())
+    return DICompositeTypeMutAttr::parse(parser, type);
+
+  llvm_unreachable("unhandled LLVM attribute kind");
+}
+
+void LLVMDialect::printAttribute(Attribute attr, DialectAsmPrinter &os) const {
+  if (succeeded(generatedAttributePrinter(attr, os)))
+    return;
+
+  if (auto composite = dyn_cast<DICompositeTypeMutAttr>(attr))
+    composite.print(os);
+  else
+    llvm_unreachable("unhandled LLVM attribute kind");
 }

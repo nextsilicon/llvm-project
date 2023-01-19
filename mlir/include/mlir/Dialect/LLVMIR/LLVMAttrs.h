@@ -61,6 +61,51 @@ public:
   static bool classof(Attribute attr);
 };
 
+namespace detail {
+class DICompositeTypeMutAttrStorage;
+} // namespace detail
+
+/// A mutable debug information attribute that describes a composite type.
+class DICompositeTypeMutAttr
+    : public Attribute::AttrBase<DICompositeTypeMutAttr, DITypeAttr,
+                                 detail::DICompositeTypeMutAttrStorage,
+                                 AttributeTrait::IsMutable> {
+public:
+  /// Inherit base constructors.
+  using Base::Base;
+
+  /// Returns the composite type with the given identifier and name.
+  static DICompositeTypeMutAttr get(MLIRContext *context, int64_t id,
+                                    StringAttr name, DITypeAttr bastType);
+
+  // static DICompositeTypeMutAttr getDistinct(int64_t id, StringAttr name);
+
+  /// Returns the keyword used when printing and parsing the composite type.
+  static constexpr StringLiteral getMnemonic() {
+    return {"di_composite_type_mut"};
+  }
+
+  LogicalResult setElements(ArrayRef<DITypeAttr> elements);
+
+  /// Returns the unique id of the composite type.
+  int64_t getID() const;
+
+  /// Returns the name of the composite type.
+  StringAttr getName() const;
+
+  /// Returns the base type of the composite type.
+  DITypeAttr getBaseType() const;
+
+  /// Returns the element types of the composite type.
+  ArrayRef<DITypeAttr> getElements() const;
+
+  /// Parses an instance of this attribute.
+  static Attribute parse(AsmParser &parser, Type type);
+
+  /// Prints this attribute.
+  void print(AsmPrinter &os) const;
+};
+
 // Inline the LLVM generated Linkage enum and utility.
 // This is only necessary to isolate the "enum generated code" from the
 // attribute definition itself.

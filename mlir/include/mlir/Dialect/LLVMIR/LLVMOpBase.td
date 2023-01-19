@@ -27,7 +27,7 @@ def LLVM_Dialect : Dialect {
   let name = "llvm";
   let cppNamespace = "::mlir::LLVM";
 
-  let useDefaultAttributePrinterParser = 1;
+  //let useDefaultAttributePrinterParser = 1;
   let hasRegionArgAttrVerify = 1;
   let hasRegionResultAttrVerify = 1;
   let hasOperationAttrVerify = 1;
@@ -83,8 +83,11 @@ def LLVM_Dialect : Dialect {
       return "llvm.readnone";
     }
 
-    Type parseType(DialectAsmParser &p) const override;
-    void printType(Type, DialectAsmPrinter &p) const override;
+    Type parseType(DialectAsmParser &parser) const override;
+    void printType(Type type, DialectAsmPrinter &os) const override;
+
+    Attribute parseAttribute(DialectAsmParser &parser, Type type) const override;
+    void printAttribute(Attribute attr, DialectAsmPrinter &os) const override;
 
   private:
     /// Register all types.

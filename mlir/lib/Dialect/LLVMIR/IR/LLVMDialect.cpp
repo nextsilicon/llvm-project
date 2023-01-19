@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "TypeDetail.h"
+#include "mlir/Dialect/LLVMIR/LLVMAttrs.h"
 #include "mlir/Dialect/LLVMIR/LLVMTypes.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -2833,12 +2834,13 @@ struct LLVMOpAsmDialectInterface : public OpAsmDialectInterface {
   AliasResult getAlias(Attribute attr, raw_ostream &os) const override {
     return TypeSwitch<Attribute, AliasResult>(attr)
         .Case<DIVoidResultTypeAttr, DIBasicTypeAttr, DICompileUnitAttr,
-              DICompositeTypeAttr, DIDerivedTypeAttr, DIFileAttr,
-              DILexicalBlockAttr, DILexicalBlockFileAttr, DILocalVariableAttr,
-              DISubprogramAttr, DISubroutineTypeAttr>([&](auto attr) {
-          os << decltype(attr)::getMnemonic();
-          return AliasResult::OverridableAlias;
-        })
+              DICompositeTypeAttr, DICompositeTypeMutAttr, DIDerivedTypeAttr,
+              DIFileAttr, DILexicalBlockAttr, DILexicalBlockFileAttr,
+              DILocalVariableAttr, DISubprogramAttr, DISubroutineTypeAttr>(
+            [&](auto attr) {
+              os << decltype(attr)::getMnemonic();
+              return AliasResult::OverridableAlias;
+            })
         .Default([](Attribute) { return AliasResult::NoAlias; });
   }
 };
