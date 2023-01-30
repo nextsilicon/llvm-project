@@ -129,14 +129,13 @@ public:
   llvm::MDNode *getAliasScope(Operation &opInst,
                               SymbolRefAttr aliasScopeRef) const;
 
-  /// Returns the LLVM metadata corresponding to a llvm loop's codegen
-  /// options attribute.
-  llvm::MDNode *lookupLoopOptionsMetadata(Attribute options) const {
-    return loopOptionsMetadataMapping.lookup(options);
+  /// Returns the LLVM metadata corresponding to a llvm loop metadata attribute.
+  llvm::MDNode *lookupLoopMetadata(Attribute options) const {
+    return loopMetadataMapping.lookup(options);
   }
 
-  void mapLoopOptionsMetadata(Attribute options, llvm::MDNode *metadata) {
-    auto result = loopOptionsMetadataMapping.try_emplace(options, metadata);
+  void mapLoopMetadata(Attribute options, llvm::MDNode *metadata) {
+    auto result = loopMetadataMapping.try_emplace(options, metadata);
     (void)result;
     assert(result.second &&
            "attempting to map loop options that was already mapped");
@@ -343,10 +342,9 @@ private:
   /// identified via their branches) and contained memory accesses.
   DenseMap<Operation *, llvm::MDNode *> accessGroupMetadataMapping;
 
-  /// Mapping from an attribute describing loop codegen options to its LLVM
-  /// metadata. The metadata is attached to Latch block branches with this
-  /// attribute.
-  DenseMap<Attribute, llvm::MDNode *> loopOptionsMetadataMapping;
+  /// Mapping from an attribute describing loop metadata to its LLVM metadata.
+  /// The metadata is attached to Latch block branches with this attribute.
+  DenseMap<Attribute, llvm::MDNode *> loopMetadataMapping;
 
   /// Mapping from an alias scope metadata operation to its LLVM metadata.
   /// This map is populated on module entry.
