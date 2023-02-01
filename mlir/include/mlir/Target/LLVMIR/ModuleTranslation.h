@@ -151,6 +151,10 @@ public:
   /// TBAA attributes.
   void setTBAAMetadata(Operation *op, llvm::Instruction *inst);
 
+  /// Sets LLVM loop metadata for branch operations that have a loop annotation
+  /// attribute.
+  void setLoopMetadata(Operation *op, llvm::Instruction *inst);
+
   /// Converts the type from MLIR LLVM dialect to LLVM.
   llvm::Type *convertType(Type type);
 

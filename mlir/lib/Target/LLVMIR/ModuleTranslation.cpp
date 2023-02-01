@@ -15,6 +15,7 @@
 
 #include "AttrKindDetail.h"
 #include "DebugTranslation.h"
+#include "LoopAnnotationTranslation.h"
 #include "mlir/Dialect/DLTI/DLTI.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/LLVMIR/Transforms/LegalizeForExport.h"
@@ -1213,6 +1214,18 @@ LogicalResult ModuleTranslation::createTBAAMetadata() {
   }
 
   return success();
+}
+
+void ModuleTranslation::setLoopMetadata(Operation *op,
+                                        llvm::Instruction *inst) {
+  auto attr =
+      op->getAttrOfType<LoopAnnotationAttr>(LLVMDialect::getLoopAttrName());
+  if (!attr)
+    return;
+  llvm::LLVMContext &ctx = llvmModule->getContext();
+  llvm::MDNode *loopMD =
+      LoopAnnotationConverter(attr, ctx, *this, op).convert();
+  inst->setMetadata(llvm::LLVMContext::MD_loop, loopMD);
 }
 
 llvm::Type *ModuleTranslation::convertType(Type type) {
