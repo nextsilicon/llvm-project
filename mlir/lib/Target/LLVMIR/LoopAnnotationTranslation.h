@@ -20,44 +20,36 @@
 namespace mlir {
 namespace LLVM {
 namespace detail {
+
 /// A helper class that converts a LoopAnnotationAttr into a corresponding
 /// llvm::MDNode.
-class LoopAnnotationConverter {
+class LoopAnnotationTranslation {
 public:
-  LoopAnnotationConverter(LoopAnnotationAttr attr, llvm::LLVMContext &ctx,
-                          LLVM::ModuleTranslation &moduleTranslation,
-                          Operation *opInst)
-      : attr(attr), ctx(ctx), moduleTranslation(moduleTranslation),
-        opInst(opInst) {}
-  /// Converts this struct's loop annotation into a corresponding LLVMIR
-  /// metadata representation.
-  llvm::MDNode *convert();
+  LoopAnnotationTranslation(LLVM::ModuleTranslation &moduleTranslation)
+      : moduleTranslation(moduleTranslation) {}
+
+  llvm::MDNode *translate(LoopAnnotationAttr attr, Operation *op);
 
 private:
-  /// Functions that convert attributes to metadata nodes and add them to the
-  /// `mdNodes` vector.
-  void addUnitNode(StringRef name);
-  void addUnitNode(StringRef name, BoolAttr attr);
-  void convertBoolNode(StringRef name, BoolAttr attr, bool negated = false);
-  void convertI32Node(StringRef name, IntegerAttr attr);
-  void convertFollowupNode(StringRef name, LoopAnnotationAttr attr);
+  /// Returns the LLVM metadata corresponding to a llvm loop metadata attribute.
+  llvm::MDNode *lookupLoopMetadata(Attribute options) const {
+    return loopMetadataMapping.lookup(options);
+  }
 
-  /// Conversion functions for each of the sub-attributes of the loop
-  /// annotation.
-  void convertLoopOptions(LoopVectorizeAttr options);
-  void convertLoopOptions(LoopInterleaveAttr options);
-  void convertLoopOptions(LoopUnrollAttr options);
-  void convertLoopOptions(LoopUnrollAndJamAttr options);
-  void convertLoopOptions(LoopLICMAttr options);
-  void convertLoopOptions(LoopDistributeAttr options);
-  void convertLoopOptions(LoopPipelineAttr options);
+  void mapLoopMetadata(Attribute options, llvm::MDNode *metadata) {
+    auto result = loopMetadataMapping.try_emplace(options, metadata);
+    (void)result;
+    assert(result.second &&
+           "attempting to map loop options that was already mapped");
+  }
 
-  LoopAnnotationAttr attr;
-  llvm::LLVMContext &ctx;
+  /// Mapping from an attribute describing loop metadata to its LLVM metadata.
+  /// The metadata is attached to Latch block branches with this attribute.
+  DenseMap<Attribute, llvm::MDNode *> loopMetadataMapping;
+
   LLVM::ModuleTranslation &moduleTranslation;
-  Operation *opInst;
-  llvm::SmallVector<llvm::Metadata *> mdNodes;
 };
+
 } // namespace detail
 } // namespace LLVM
 } // namespace mlir

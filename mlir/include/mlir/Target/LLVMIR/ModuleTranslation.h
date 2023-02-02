@@ -40,6 +40,7 @@ namespace LLVM {
 
 namespace detail {
 class DebugTranslation;
+class LoopAnnotationTranslation;
 } // namespace detail
 
 class DINodeAttr;
@@ -128,18 +129,6 @@ public:
   /// dialect alias scope operation
   llvm::MDNode *getAliasScope(Operation &opInst,
                               SymbolRefAttr aliasScopeRef) const;
-
-  /// Returns the LLVM metadata corresponding to a llvm loop metadata attribute.
-  llvm::MDNode *lookupLoopMetadata(Attribute options) const {
-    return loopMetadataMapping.lookup(options);
-  }
-
-  void mapLoopMetadata(Attribute options, llvm::MDNode *metadata) {
-    auto result = loopMetadataMapping.try_emplace(options, metadata);
-    (void)result;
-    assert(result.second &&
-           "attempting to map loop options that was already mapped");
-  }
 
   // Sets LLVM metadata for memory operations that are in a parallel loop.
   void setAccessGroupsMetadata(Operation *op, llvm::Instruction *inst);
@@ -318,6 +307,9 @@ private:
   /// A converter for translating debug information.
   std::unique_ptr<detail::DebugTranslation> debugTranslation;
 
+  /// A converter for translating loop annotations.
+  std::unique_ptr<detail::LoopAnnotationTranslation> loopAnnotationTranslation;
+
   /// Builder for LLVM IR generation of OpenMP constructs.
   std::unique_ptr<llvm::OpenMPIRBuilder> ompBuilder;
 
@@ -345,10 +337,6 @@ private:
   /// This map is populated on module entry and is used to annotate loops (as
   /// identified via their branches) and contained memory accesses.
   DenseMap<Operation *, llvm::MDNode *> accessGroupMetadataMapping;
-
-  /// Mapping from an attribute describing loop metadata to its LLVM metadata.
-  /// The metadata is attached to Latch block branches with this attribute.
-  DenseMap<Attribute, llvm::MDNode *> loopMetadataMapping;
 
   /// Mapping from an alias scope metadata operation to its LLVM metadata.
   /// This map is populated on module entry.

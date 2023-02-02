@@ -412,6 +412,8 @@ ModuleTranslation::ModuleTranslation(Operation *module,
     : mlirModule(module), llvmModule(std::move(llvmModule)),
       debugTranslation(
           std::make_unique<DebugTranslation>(module, *this->llvmModule)),
+      loopAnnotationTranslation(
+          std::make_unique<LoopAnnotationTranslation>(*this)),
       typeTranslator(this->llvmModule->getContext()),
       iface(module->getContext()) {
   assert(satisfiesLLVMModule(mlirModule) &&
@@ -1222,9 +1224,7 @@ void ModuleTranslation::setLoopMetadata(Operation *op,
       op->getAttrOfType<LoopAnnotationAttr>(LLVMDialect::getLoopAttrName());
   if (!attr)
     return;
-  llvm::LLVMContext &ctx = llvmModule->getContext();
-  llvm::MDNode *loopMD =
-      LoopAnnotationConverter(attr, ctx, *this, op).convert();
+  llvm::MDNode *loopMD = loopAnnotationTranslation->translate(attr, op);
   inst->setMetadata(llvm::LLVMContext::MD_loop, loopMD);
 }
 
