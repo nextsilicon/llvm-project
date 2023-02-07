@@ -149,17 +149,19 @@ static LogicalResult setAccessGroupAttr(const llvm::MDNode *node, Operation *op,
                                         LLVM::ModuleImport &moduleImport) {
   FailureOr<SmallVector<SymbolRefAttr>> accessGroups =
       moduleImport.lookupAccessGroupAttrs(node);
+  if (failed(accessGroups))
+    return failure();
 
-  SmallVector<Attribute> accessGroupAttrs;
-  llvm::copy(*accessGroups, std::back_inserter(accessGroupAttrs));
-
+  SmallVector<Attribute> accessGroupAttrs(accessGroups->begin(),
+                                          accessGroups->end());
   op->setAttr(LLVMDialect::getAccessGroupsAttrName(),
               ArrayAttr::get(op->getContext(), accessGroupAttrs));
   return success();
 }
 
-/// Converts LLVM loop metadata starting from `node` to MLIR loop information.
-/// Returns success if all conversions succeed and failure otherwise.
+/// Converts the given loop metadata node to an MLIR loop annotation attribute
+/// and attaches it to the imported operation if the translation succeeds.
+/// Returns failure otherwise.
 static LogicalResult setLoopAttr(const llvm::MDNode *node, Operation *op,
                                  LLVM::ModuleImport &moduleImport) {
   LoopAnnotationAttr attr =

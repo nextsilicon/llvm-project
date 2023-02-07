@@ -313,6 +313,22 @@ end:
 ; // -----
 
 ; CHECK:      import-failure.ll
+; CHECK-SAME: warning: cannot import loop properties with duplicated names llvm.loop.disable_nonforced
+; CHECK:      import-failure.ll
+; CHECK-SAME: warning: unhandled metadata: !0 = distinct !{!0, !1, !1}
+define void @unsupported_loop_annotation(i64 %n, ptr %A) {
+entry:
+  br label %end, !llvm.loop !0
+end:
+  ret void
+}
+
+!0 = distinct !{!0, !1, !1}
+!1 = !{!"llvm.loop.disable_nonforced"}
+
+; // -----
+
+; CHECK:      import-failure.ll
 ; CHECK-SAME: warning: expected metadata node llvm.loop.disable_nonforced to hold no value
 ; CHECK:      import-failure.ll
 ; CHECK-SAME: warning: unhandled metadata: !0 = distinct !{!0, !1}

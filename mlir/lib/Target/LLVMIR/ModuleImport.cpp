@@ -1575,7 +1575,8 @@ LogicalResult ModuleImport::processBasicBlock(llvm::BasicBlock *bb,
 
 FailureOr<SmallVector<SymbolRefAttr>>
 ModuleImport::lookupAccessGroupAttrs(const llvm::MDNode *node) const {
-  // An access group node is either access group or an access group list.
+  // An access group node is either a single access group or an access group
+  // list.
   SmallVector<SymbolRefAttr> accessGroups;
   if (!node->getNumOperands())
     accessGroups.push_back(accessGroupMapping.lookup(node));

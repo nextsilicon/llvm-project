@@ -14,7 +14,7 @@ using namespace mlir::LLVM;
 using namespace mlir::LLVM::detail;
 
 namespace {
-/// Helper class that keeps state of one metadata to attribute conversion.
+/// Helper class that keeps the state of one metadata to attribute conversion.
 struct LoopMetadataConversion {
   LoopMetadataConversion(const llvm::MDNode *node, ModuleImport &moduleImport,
                          Location loc,
@@ -86,7 +86,10 @@ LogicalResult LoopMetadataConversion::initPropertyMap() {
       return emitWarning(loc) << "cannot import loop property without a name";
     StringRef name = nameNode->getString();
 
-    propertyMap.try_emplace(name, property);
+    bool succ = propertyMap.try_emplace(name, property).second;
+    if (!succ)
+      return emitWarning(loc)
+             << "cannot import loop properties with duplicated names " << name;
   }
 
   return success();
@@ -121,15 +124,15 @@ FailureOr<BoolAttr> LoopMetadataConversion::lookupBooleanUnitNode(
   if (failed(enable) || failed(disable))
     return failure();
 
-  if (enable.value() && disable.value())
+  if (*enable && *disable)
     return emitWarning(loc)
            << "expected metadata nodes " << enableName << " and " << disableName
            << " to be mutually exclusive.";
 
-  if (enable.value())
+  if (*enable)
     return BoolAttr::get(ctx, !negated);
 
-  if (disable.value())
+  if (*disable)
     return BoolAttr::get(ctx, negated);
   return BoolAttr(nullptr);
 }
@@ -140,17 +143,17 @@ FailureOr<BoolAttr> LoopMetadataConversion::lookupBoolNode(StringRef name,
   if (!property)
     return BoolAttr(nullptr);
 
-  auto valueError = [&]() {
+  auto emitNodeWarning = [&]() {
     return emitWarning(loc)
            << "expected metadata node " << name << " to hold a boolean value";
   };
 
   if (property->getNumOperands() != 2)
-    return valueError();
+    return emitNodeWarning();
   llvm::ConstantInt *val =
       llvm::mdconst::dyn_extract<llvm::ConstantInt>(property->getOperand(1));
   if (!val || val->getBitWidth() != 1)
-    return valueError();
+    return emitNodeWarning();
 
   return BoolAttr::get(ctx, val->getValue().getLimitedValue(1) ^ negated);
 }
@@ -160,18 +163,18 @@ FailureOr<IntegerAttr> LoopMetadataConversion::lookupIntNode(StringRef name) {
   if (!property)
     return IntegerAttr(nullptr);
 
-  auto valueError = [&]() {
+  auto emitNodeWarning = [&]() {
     return emitWarning(loc)
            << "expected metadata node " << name << " to hold an i32 value";
   };
 
   if (property->getNumOperands() != 2)
-    return valueError();
+    return emitNodeWarning();
 
   llvm::ConstantInt *val =
       llvm::mdconst::dyn_extract<llvm::ConstantInt>(property->getOperand(1));
   if (!val || val->getBitWidth() != 32)
-    return valueError();
+    return emitNodeWarning();
 
   return IntegerAttr::get(IntegerType::get(ctx, 32),
                           val->getValue().getLimitedValue());
@@ -182,17 +185,17 @@ FailureOr<llvm::MDNode *> LoopMetadataConversion::lookupMDNode(StringRef name) {
   if (!property)
     return nullptr;
 
-  auto valueError = [&]() {
+  auto emitNodeWarning = [&]() {
     return emitWarning(loc)
            << "expected metadata node " << name << " to hold an MDNode";
   };
 
   if (property->getNumOperands() != 2)
-    return valueError();
+    return emitNodeWarning();
 
   auto *node = dyn_cast<llvm::MDNode>(property->getOperand(1));
   if (!node)
-    return valueError();
+    return emitNodeWarning();
 
   return node;
 }
@@ -204,18 +207,18 @@ LoopMetadataConversion::lookupMDNodes(StringRef name) {
   if (!property)
     return res;
 
-  auto valueError = [&]() {
+  auto emitNodeWarning = [&]() {
     return emitWarning(loc) << "expected metadata node " << name
                             << " to hold one or multiple MDNodes";
   };
 
   if (property->getNumOperands() < 2)
-    return valueError();
+    return emitNodeWarning();
 
   for (unsigned i = 1, e = property->getNumOperands(); i < e; ++i) {
     auto *node = dyn_cast<llvm::MDNode>(property->getOperand(i));
     if (!node)
-      return valueError();
+      return emitNodeWarning();
     res.push_back(node);
   }
 
@@ -227,16 +230,16 @@ LoopMetadataConversion::lookupFollowupNode(StringRef name) {
   auto node = lookupMDNode(name);
   if (failed(node))
     return failure();
-  if (node.value() == nullptr)
+  if (*node == nullptr)
     return LoopAnnotationAttr(nullptr);
 
-  return loopAnnotationImporter.translate(node.value(), loc);
+  return loopAnnotationImporter.translate(*node, loc);
 }
 
-static bool emptyParam(const Attribute attr) { return !attr; }
+static bool isEmptyOrNull(const Attribute attr) { return !attr; }
 
 template <typename T>
-static bool emptyParam(const SmallVectorImpl<T> &vec) {
+static bool isEmptyOrNull(const SmallVectorImpl<T> &vec) {
   return vec.empty();
 }
 
@@ -248,23 +251,27 @@ static T createIfNonNull(MLIRContext *ctx, const P &...args) {
   if (anyFailed)
     return {};
 
-  bool allEmpty = (emptyParam(args.value()) && ...);
+  bool allEmpty = (isEmptyOrNull(*args) && ...);
   if (allEmpty)
     return {};
 
-  return T::get(ctx, args.value()...);
+  return T::get(ctx, *args...);
 }
 
 FailureOr<LoopVectorizeAttr> LoopMetadataConversion::convertVectorizeAttr() {
-  auto enable = lookupBoolNode("llvm.loop.vectorize.enable", true);
-  auto predicateEnable = lookupBoolNode("llvm.loop.vectorize.predicate.enable");
-  auto scalableEnable = lookupBoolNode("llvm.loop.vectorize.scalable.enable");
-  auto width = lookupIntNode("llvm.loop.vectorize.width");
-  auto followupVec =
+  FailureOr<BoolAttr> enable =
+      lookupBoolNode("llvm.loop.vectorize.enable", true);
+  FailureOr<BoolAttr> predicateEnable =
+      lookupBoolNode("llvm.loop.vectorize.predicate.enable");
+  FailureOr<BoolAttr> scalableEnable =
+      lookupBoolNode("llvm.loop.vectorize.scalable.enable");
+  FailureOr<IntegerAttr> width = lookupIntNode("llvm.loop.vectorize.width");
+  FailureOr<LoopAnnotationAttr> followupVec =
       lookupFollowupNode("llvm.loop.vectorize.followup_vectorized");
-  auto followupEpi =
+  FailureOr<LoopAnnotationAttr> followupEpi =
       lookupFollowupNode("llvm.loop.vectorize.followup_epilogue");
-  auto followupAll = lookupFollowupNode("llvm.loop.vectorize.followup_all");
+  FailureOr<LoopAnnotationAttr> followupAll =
+      lookupFollowupNode("llvm.loop.vectorize.followup_all");
 
   return createIfNonNull<LoopVectorizeAttr>(ctx, enable, predicateEnable,
                                             scalableEnable, width, followupVec,
@@ -272,18 +279,20 @@ FailureOr<LoopVectorizeAttr> LoopMetadataConversion::convertVectorizeAttr() {
 }
 
 FailureOr<LoopInterleaveAttr> LoopMetadataConversion::convertInterleaveAttr() {
-  auto count = lookupIntNode("llvm.loop.interleave.count");
+  FailureOr<IntegerAttr> count = lookupIntNode("llvm.loop.interleave.count");
   return createIfNonNull<LoopInterleaveAttr>(ctx, count);
 }
 
 FailureOr<LoopUnrollAttr> LoopMetadataConversion::convertUnrollAttr() {
-  auto disable = lookupBooleanUnitNode(
+  FailureOr<BoolAttr> disable = lookupBooleanUnitNode(
       "llvm.loop.unroll.enable", "llvm.loop.unroll.disable", /*negated=*/true);
-  auto count = lookupIntNode("llvm.loop.unroll.count");
-  auto runtimeDisable = lookupUnitNode("llvm.loop.unroll.runtime.disable");
-  auto full = lookupUnitNode("llvm.loop.unroll.full");
-  auto followup = lookupFollowupNode("llvm.loop.unroll.followup");
-  auto followupRemainder =
+  FailureOr<IntegerAttr> count = lookupIntNode("llvm.loop.unroll.count");
+  FailureOr<BoolAttr> runtimeDisable =
+      lookupUnitNode("llvm.loop.unroll.runtime.disable");
+  FailureOr<BoolAttr> full = lookupUnitNode("llvm.loop.unroll.full");
+  FailureOr<LoopAnnotationAttr> followup =
+      lookupFollowupNode("llvm.loop.unroll.followup");
+  FailureOr<LoopAnnotationAttr> followupRemainder =
       lookupFollowupNode("llvm.loop.unroll.followup_remainder");
 
   return createIfNonNull<LoopUnrollAttr>(ctx, disable, count, runtimeDisable,
@@ -292,19 +301,20 @@ FailureOr<LoopUnrollAttr> LoopMetadataConversion::convertUnrollAttr() {
 
 FailureOr<LoopUnrollAndJamAttr>
 LoopMetadataConversion::convertUnrollAndJamAttr() {
-  auto disable = lookupBooleanUnitNode("llvm.loop.unroll_and_jam.enable",
-                                       "llvm.loop.unroll_and_jam.disable",
-                                       /*negated=*/true);
-  auto count = lookupIntNode("llvm.loop.unroll_and_jam.count");
-  auto followupOuter =
+  FailureOr<BoolAttr> disable = lookupBooleanUnitNode(
+      "llvm.loop.unroll_and_jam.enable", "llvm.loop.unroll_and_jam.disable",
+      /*negated=*/true);
+  FailureOr<IntegerAttr> count =
+      lookupIntNode("llvm.loop.unroll_and_jam.count");
+  FailureOr<LoopAnnotationAttr> followupOuter =
       lookupFollowupNode("llvm.loop.unroll_and_jam.followup_outer");
-  auto followupInner =
+  FailureOr<LoopAnnotationAttr> followupInner =
       lookupFollowupNode("llvm.loop.unroll_and_jam.followup_inner");
-  auto followupRemainderOuter =
+  FailureOr<LoopAnnotationAttr> followupRemainderOuter =
       lookupFollowupNode("llvm.loop.unroll_and_jam.followup_remainder_outer");
-  auto followupRemainderInner =
+  FailureOr<LoopAnnotationAttr> followupRemainderInner =
       lookupFollowupNode("llvm.loop.unroll_and_jam.followup_remainder_inner");
-  auto followupAll =
+  FailureOr<LoopAnnotationAttr> followupAll =
       lookupFollowupNode("llvm.loop.unroll_and_jam.followup_all");
   return createIfNonNull<LoopUnrollAndJamAttr>(
       ctx, disable, count, followupOuter, followupInner, followupRemainderOuter,
@@ -312,28 +322,31 @@ LoopMetadataConversion::convertUnrollAndJamAttr() {
 }
 
 FailureOr<LoopLICMAttr> LoopMetadataConversion::convertLICMAttr() {
-  auto disable = lookupUnitNode("llvm.licm.disable");
-  auto versioningDisable = lookupUnitNode("llvm.loop.licm_versioning.disable");
+  FailureOr<BoolAttr> disable = lookupUnitNode("llvm.licm.disable");
+  FailureOr<BoolAttr> versioningDisable =
+      lookupUnitNode("llvm.loop.licm_versioning.disable");
   return createIfNonNull<LoopLICMAttr>(ctx, disable, versioningDisable);
 }
 
 FailureOr<LoopDistributeAttr> LoopMetadataConversion::convertDistributeAttr() {
-  auto disable = lookupBoolNode("llvm.loop.distribute.enable", true);
-  auto followupCoincident =
+  FailureOr<BoolAttr> disable =
+      lookupBoolNode("llvm.loop.distribute.enable", true);
+  FailureOr<LoopAnnotationAttr> followupCoincident =
       lookupFollowupNode("llvm.loop.distribute.followup_coincident");
-  auto followupSequential =
+  FailureOr<LoopAnnotationAttr> followupSequential =
       lookupFollowupNode("llvm.loop.distribute.followup_sequential");
-  auto followupFallback =
+  FailureOr<LoopAnnotationAttr> followupFallback =
       lookupFollowupNode("llvm.loop.distribute.followup_fallback");
-  auto followupAll = lookupFollowupNode("llvm.loop.distribute.followup_all");
+  FailureOr<LoopAnnotationAttr> followupAll =
+      lookupFollowupNode("llvm.loop.distribute.followup_all");
   return createIfNonNull<LoopDistributeAttr>(ctx, disable, followupCoincident,
                                              followupSequential,
                                              followupFallback, followupAll);
 }
 
 FailureOr<LoopPipelineAttr> LoopMetadataConversion::convertPipelineAttr() {
-  auto disable = lookupBoolNode("llvm.loop.pipeline.disable");
-  auto initiationinterval =
+  FailureOr<BoolAttr> disable = lookupBoolNode("llvm.loop.pipeline.disable");
+  FailureOr<IntegerAttr> initiationinterval =
       lookupIntNode("llvm.loop.pipeline.initiationinterval");
   return createIfNonNull<LoopPipelineAttr>(ctx, disable, initiationinterval);
 }
@@ -345,11 +358,12 @@ LoopMetadataConversion::convertParallelAccesses() {
   if (failed(nodes))
     return failure();
   SmallVector<SymbolRefAttr> refs;
-  for (auto *node : nodes.value()) {
-    auto accessGroups = moduleImport.lookupAccessGroupAttrs(node);
+  for (llvm::MDNode *node : *nodes) {
+    FailureOr<SmallVector<SymbolRefAttr>> accessGroups =
+        moduleImport.lookupAccessGroupAttrs(node);
     if (failed(accessGroups))
       return emitWarning(loc) << "could not lookup access group";
-    llvm::copy(accessGroups.value(), std::back_inserter(refs));
+    llvm::append_range(refs, *accessGroups);
   }
   return refs;
 }
@@ -391,8 +405,9 @@ LoopAnnotationAttr LoopAnnotationImporter::translate(const llvm::MDNode *node,
 
   // Note: This check is necessary to distinguish between failed translations
   // and not yet attempted translations.
-  if (loopMetadataMapping.count(node))
-    return loopMetadataMapping.lookup(node);
+  auto it = loopMetadataMapping.find(node);
+  if (it != loopMetadataMapping.end())
+    return it->getSecond();
 
   LoopAnnotationAttr attr =
       LoopMetadataConversion(node, moduleImport, loc, *this).convert();

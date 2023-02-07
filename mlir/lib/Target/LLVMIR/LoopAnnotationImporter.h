@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef MLIR_LIB_TARGET_LLVMIR_LOOPANNOTATIONIMPOIRT_H_
-#define MLIR_LIB_TARGET_LLVMIR_LOOPANNOTATIONIMPOIRT_H_
+#ifndef MLIR_LIB_TARGET_LLVMIR_LOOPANNOTATIONIMPORTER_H_
+#define MLIR_LIB_TARGET_LLVMIR_LOOPANNOTATIONIMPORTER_H_
 
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Target/LLVMIR/ModuleImport.h"
@@ -50,4 +50,4 @@ private:
 } // namespace LLVM
 } // namespace mlir
 
-#endif // MLIR_LIB_TARGET_LLVMIR_LOOPANNOTATIONIMPOIRT_H_
+#endif // MLIR_LIB_TARGET_LLVMIR_LOOPANNOTATIONIMPORTER_H_

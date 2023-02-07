@@ -28,12 +28,12 @@ define void @access_group(ptr %arg1) {
 
 ; // -----
 
-; CHECK: #[[ANNOT_ATTR:.*]] = #llvm.loop_annotation<disableNonforced = true, mustProgress = true>
+; CHECK: #[[$ANNOT_ATTR:.*]] = #llvm.loop_annotation<disableNonforced = true, mustProgress = true>
 
-; CHECK: @simple
+; CHECK-LABEL: @simple
 define void @simple(i64 %n, ptr %A) {
 entry:
-; CHECK: llvm.br ^{{.*}} {llvm.loop = #[[ANNOT_ATTR]]}
+; CHECK: llvm.br ^{{.*}} {llvm.loop = #[[$ANNOT_ATTR]]}
   br label %end, !llvm.loop !1
 end:
   ret void
@@ -47,12 +47,12 @@ end:
 
 ; CHECK-DAG: #[[FOLLOWUP:.*]] = #llvm.loop_annotation<disableNonforced = true>
 ; CHECK-DAG: #[[VECTORIZE_ATTR:.*]] = #llvm.loop_vectorize<disable = false, predicateEnable = true, scalableEnable = false, width = 16 : i32, followupVectorized = #[[FOLLOWUP]], followupEpilogue = #[[FOLLOWUP]], followupAll = #[[FOLLOWUP]]>
-; CHECK-DAG: #[[ANNOT_ATTR:.*]] = #llvm.loop_annotation<vectorize = #[[VECTORIZE_ATTR]]>
+; CHECK-DAG: #[[$ANNOT_ATTR:.*]] = #llvm.loop_annotation<vectorize = #[[VECTORIZE_ATTR]]>
 
-; CHECK: @vectorize
+; CHECK-LABEL: @vectorize
 define void @vectorize(i64 %n, ptr %A) {
 entry:
-; CHECK: llvm.br ^{{.*}} {llvm.loop = #[[ANNOT_ATTR]]}
+; CHECK: llvm.br ^{{.*}} {llvm.loop = #[[$ANNOT_ATTR]]}
   br label %end, !llvm.loop !1
 end:
   ret void
@@ -73,12 +73,12 @@ end:
 ; // -----
 
 ; CHECK-DAG: #[[INTERLEAVE_ATTR:.*]] = #llvm.loop_interleave<count = 8 : i32>
-; CHECK-DAG: #[[ANNOT_ATTR:.*]] = #llvm.loop_annotation<interleave = #[[INTERLEAVE_ATTR]]>
+; CHECK-DAG: #[[$ANNOT_ATTR:.*]] = #llvm.loop_annotation<interleave = #[[INTERLEAVE_ATTR]]>
 
-; CHECK: @interleave
+; CHECK-LABEL: @interleave
 define void @interleave(i64 %n, ptr %A) {
 entry:
-; CHECK: llvm.br ^{{.*}} {llvm.loop = #[[ANNOT_ATTR]]}
+; CHECK: llvm.br ^{{.*}} {llvm.loop = #[[$ANNOT_ATTR]]}
   br label %end, !llvm.loop !1
 end:
   ret void
@@ -91,12 +91,12 @@ end:
 
 ; CHECK-DAG: #[[FOLLOWUP:.*]] = #llvm.loop_annotation<disableNonforced = true>
 ; CHECK-DAG: #[[UNROLL_ATTR:.*]] = #llvm.loop_unroll<disable = false, count = 16 : i32, runtimeDisable = true, full = true, followup = #[[FOLLOWUP]], followupRemainder = #[[FOLLOWUP]]>
-; CHECK-DAG: #[[ANNOT_ATTR:.*]] = #llvm.loop_annotation<unroll = #[[UNROLL_ATTR]]>
+; CHECK-DAG: #[[$ANNOT_ATTR:.*]] = #llvm.loop_annotation<unroll = #[[UNROLL_ATTR]]>
 
-; CHECK: @unroll
+; CHECK-LABEL: @unroll
 define void @unroll(i64 %n, ptr %A) {
 entry:
-; CHECK: llvm.br ^{{.*}} {llvm.loop = #[[ANNOT_ATTR]]}
+; CHECK: llvm.br ^{{.*}} {llvm.loop = #[[$ANNOT_ATTR]]}
   br label %end, !llvm.loop !1
 end:
   ret void
@@ -116,12 +116,12 @@ end:
 ; // -----
 
 ; CHECK-DAG: #[[UNROLL_ATTR:.*]] = #llvm.loop_unroll<disable = true>
-; CHECK-DAG: #[[ANNOT_ATTR:.*]] = #llvm.loop_annotation<unroll = #[[UNROLL_ATTR]]>
+; CHECK-DAG: #[[$ANNOT_ATTR:.*]] = #llvm.loop_annotation<unroll = #[[UNROLL_ATTR]]>
 
-; CHECK: @unroll_disable
+; CHECK-LABEL: @unroll_disable
 define void @unroll_disable(i64 %n, ptr %A) {
 entry:
-; CHECK: llvm.br ^{{.*}} {llvm.loop = #[[ANNOT_ATTR]]}
+; CHECK: llvm.br ^{{.*}} {llvm.loop = #[[$ANNOT_ATTR]]}
   br label %end, !llvm.loop !1
 end:
   ret void
@@ -134,12 +134,12 @@ end:
 
 ; CHECK-DAG: #[[FOLLOWUP:.*]] = #llvm.loop_annotation<disableNonforced = true>
 ; CHECK-DAG: #[[UNROLL_AND_JAM_ATTR:.*]] = #llvm.loop_unroll_and_jam<disable = false, count = 32 : i32, followupOuter = #[[FOLLOWUP]], followupInner = #[[FOLLOWUP]], followupRemainderOuter = #[[FOLLOWUP]], followupRemainderInner = #[[FOLLOWUP]], followupAll = #[[FOLLOWUP]]>
-; CHECK-DAG: #[[ANNOT_ATTR:.*]] = #llvm.loop_annotation<unrollAndJam = #[[UNROLL_AND_JAM_ATTR]]>
+; CHECK-DAG: #[[$ANNOT_ATTR:.*]] = #llvm.loop_annotation<unrollAndJam = #[[UNROLL_AND_JAM_ATTR]]>
 
-; CHECK: @unroll_and_jam
+; CHECK-LABEL: @unroll_and_jam
 define void @unroll_and_jam(i64 %n, ptr %A) {
 entry:
-; CHECK: llvm.br ^{{.*}} {llvm.loop = #[[ANNOT_ATTR]]}
+; CHECK: llvm.br ^{{.*}} {llvm.loop = #[[$ANNOT_ATTR]]}
   br label %end, !llvm.loop !1
 end:
   ret void
@@ -160,12 +160,12 @@ end:
 ; // -----
 
 ; CHECK-DAG: #[[LICM_ATTR:.*]] = #llvm.loop_licm<disable = true, versioningDisable = true>
-; CHECK-DAG: #[[ANNOT_ATTR:.*]] = #llvm.loop_annotation<licm = #[[LICM_ATTR]]>
+; CHECK-DAG: #[[$ANNOT_ATTR:.*]] = #llvm.loop_annotation<licm = #[[LICM_ATTR]]>
 
-; CHECK: @licm
+; CHECK-LABEL: @licm
 define void @licm(i64 %n, ptr %A) {
 entry:
-; CHECK: llvm.br ^{{.*}} {llvm.loop = #[[ANNOT_ATTR]]}
+; CHECK: llvm.br ^{{.*}} {llvm.loop = #[[$ANNOT_ATTR]]}
   br label %end, !llvm.loop !1
 end:
   ret void
@@ -179,12 +179,12 @@ end:
 
 ; CHECK-DAG: #[[FOLLOWUP:.*]] = #llvm.loop_annotation<disableNonforced = true>
 ; CHECK-DAG: #[[DISTRIBUTE_ATTR:.*]] = #llvm.loop_distribute<disable = true, followupCoincident = #[[FOLLOWUP]], followupSequential = #[[FOLLOWUP]], followupFallback = #[[FOLLOWUP]], followupAll = #[[FOLLOWUP]]>
-; CHECK-DAG: #[[ANNOT_ATTR:.*]] = #llvm.loop_annotation<distribute = #[[DISTRIBUTE_ATTR]]>
+; CHECK-DAG: #[[$ANNOT_ATTR:.*]] = #llvm.loop_annotation<distribute = #[[DISTRIBUTE_ATTR]]>
 
-; CHECK: @distribute
+; CHECK-LABEL: @distribute
 define void @distribute(i64 %n, ptr %A) {
 entry:
-; CHECK: llvm.br ^{{.*}} {llvm.loop = #[[ANNOT_ATTR]]}
+; CHECK: llvm.br ^{{.*}} {llvm.loop = #[[$ANNOT_ATTR]]}
   br label %end, !llvm.loop !1
 end:
   ret void
@@ -203,12 +203,12 @@ end:
 ; // -----
 
 ; CHECK-DAG: #[[PIPELINE_ATTR:.*]] = #llvm.loop_pipeline<disable = false, initiationinterval = 2 : i32>
-; CHECK-DAG: #[[ANNOT_ATTR:.*]] = #llvm.loop_annotation<pipeline = #[[PIPELINE_ATTR]]>
+; CHECK-DAG: #[[$ANNOT_ATTR:.*]] = #llvm.loop_annotation<pipeline = #[[PIPELINE_ATTR]]>
 
-; CHECK: @pipeline
+; CHECK-LABEL: @pipeline
 define void @pipeline(i64 %n, ptr %A) {
 entry:
-; CHECK: llvm.br ^{{.*}} {llvm.loop = #[[ANNOT_ATTR]]}
+; CHECK: llvm.br ^{{.*}} {llvm.loop = #[[$ANNOT_ATTR]]}
   br label %end, !llvm.loop !1
 end:
   ret void
@@ -220,16 +220,16 @@ end:
 
 ; // -----
 
-; CHECK: #[[ANNOT_ATTR:.*]] = #llvm.loop_annotation<parallelAccesses = @__llvm_global_metadata::@[[GROUP0:.*]]>
+; CHECK: #[[$ANNOT_ATTR:.*]] = #llvm.loop_annotation<parallelAccesses = @__llvm_global_metadata::@[[GROUP0:.*]]>
 
 ; CHECK: llvm.metadata @__llvm_global_metadata {
 ; CHECK:   llvm.access_group @[[GROUP0]]
 
-; CHECK: @parallel_accesses
+; CHECK-LABEL: @parallel_accesses
 define void @parallel_accesses(ptr %arg) {
 entry:
   %0 = load i32, ptr %arg, !llvm.access.group !0
-; CHECK: llvm.br ^{{.*}} {llvm.loop = #[[ANNOT_ATTR]]}
+; CHECK: llvm.br ^{{.*}} {llvm.loop = #[[$ANNOT_ATTR]]}
   br label %end, !llvm.loop !1
 end:
   ret void
@@ -241,18 +241,18 @@ end:
 
 ; // -----
 
-; CHECK: #[[ANNOT_ATTR:.*]] = #llvm.loop_annotation<parallelAccesses = @__llvm_global_metadata::@[[GROUP0:.*]], @__llvm_global_metadata::@[[GROUP1:.*]]>
+; CHECK: #[[$ANNOT_ATTR:.*]] = #llvm.loop_annotation<parallelAccesses = @__llvm_global_metadata::@[[GROUP0:.*]], @__llvm_global_metadata::@[[GROUP1:.*]]>
 
 ; CHECK: llvm.metadata @__llvm_global_metadata {
 ; CHECK:   llvm.access_group @[[GROUP0]]
 ; CHECK:   llvm.access_group @[[GROUP1]]
 
-; CHECK: @multiple_parallel_accesses
+; CHECK-LABEL: @multiple_parallel_accesses
 define void @multiple_parallel_accesses(ptr %arg) {
 entry:
   %0 = load i32, ptr %arg, !llvm.access.group !0
   %1 = load i32, ptr %arg, !llvm.access.group !3
-; CHECK: llvm.br ^{{.*}} {llvm.loop = #[[ANNOT_ATTR]]}
+; CHECK: llvm.br ^{{.*}} {llvm.loop = #[[$ANNOT_ATTR]]}
   br label %end, !llvm.loop !1
 end:
   ret void
