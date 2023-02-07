@@ -78,56 +78,13 @@ static void filterFuncAttributes(func::FuncOp func, bool filterArgAndResAttrs,
   }
 }
 
-/// Combines all result attributes into a single DictionaryAttr
-/// and prepends to argument attrs.
-/// This is intended to be used to format the attributes for a C wrapper
-/// function when the result(s) is converted to the first function argument
-/// (in the multiple return case, all returns get wrapped into a single
-/// argument). The total number of argument attributes should be equal to
-/// (number of function arguments) + 1.
-// static void
-// prependResAttrsToArgAttrs(OpBuilder &builder,
-//                           SmallVectorImpl<NamedAttribute> &attributes,
-//                           func::FuncOp func) {
-//   size_t numArguments = func.getNumArguments();
-//   auto allAttrs = SmallVector<Attribute>(
-//       numArguments + 1, DictionaryAttr::get(builder.getContext()));
-//   NamedAttribute *argAttrs = nullptr;
-//   for (auto *it = attributes.begin(); it != attributes.end();) {
-//     if (it->getName() == func.getArgAttrsAttrName()) {
-//       auto arrayAttrs = it->getValue().cast<ArrayAttr>();
-//       assert(arrayAttrs.size() == numArguments &&
-//              "Number of arg attrs and args should match");
-//       std::copy(arrayAttrs.begin(), arrayAttrs.end(), allAttrs.begin() + 1);
-//       argAttrs = it;
-//     } else if (it->getName() == func.getResAttrsAttrName()) {
-//       auto arrayAttrs = it->getValue().cast<ArrayAttr>();
-//       assert(!arrayAttrs.empty() && "expected array to be non-empty");
-//       allAttrs[0] = (arrayAttrs.size() == 1)
-//                         ? arrayAttrs[0]
-//                         : wrapAsStructAttrs(builder, arrayAttrs);
-//       it = attributes.erase(it);
-//       continue;
-//     }
-//     it++;
-//   }
-//
-//   auto newArgAttrs = builder.getNamedAttr(func.getArgAttrsAttrName(),
-//                                           builder.getArrayAttr(allAttrs));
-//   if (!argAttrs) {
-//     attributes.emplace_back(newArgAttrs);
-//     return;
-//   }
-//   *argAttrs = newArgAttrs;
-// }
-
+/// Adds a an empty set of argument attributes for the newly added argument in
+/// front of the existing ones.
 static void prependEmptyArgAttr(OpBuilder &builder,
                                 SmallVectorImpl<NamedAttribute> &newFuncAttrs,
                                 func::FuncOp func) {
-  newFuncAttrs.push_back(builder.getNamedAttr(
-      func.getResAttrsAttrName(),
-      builder.getArrayAttr({builder.getDictionaryAttr({})})));
   auto argAttrs = func.getArgAttrs();
+  // Nothing to do when there were no arg attrs beforehand.
   if (!argAttrs)
     return;
 
@@ -326,9 +283,10 @@ protected:
     filterFuncAttributes(funcOp, /*filterArgAndResAttrs=*/true, attributes);
     if (ArrayAttr resAttrDicts = funcOp.getAllResultAttrs()) {
       assert(!resAttrDicts.empty() && "expected array to be non-empty");
-      auto newResAttrDicts = (funcOp.getNumResults() == 1)
-                                 ? resAttrDicts
-                                 : rewriter.getArrayAttr({});
+      auto newResAttrDicts =
+          (funcOp.getNumResults() == 1)
+              ? resAttrDicts
+              : rewriter.getArrayAttr(rewriter.getDictionaryAttr({}));
       attributes.push_back(
           rewriter.getNamedAttr(funcOp.getResAttrsAttrName(), newResAttrDicts));
     }
