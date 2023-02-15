@@ -1556,7 +1556,7 @@ LogicalResult ModuleImport::processBasicBlock(llvm::BasicBlock *bb,
       setNonDebugMetadataAttrs(&inst, op);
     } else if (inst.getOpcode() != llvm::Instruction::PHI) {
       Location loc = debugImporter->translateLoc(inst.getDebugLoc());
-      emitWarning(loc) << "dropped instruction: " << diag(inst);
+      // emitWarning(loc) << "dropped instruction: " << diag(inst);
     }
   }
   return success();
