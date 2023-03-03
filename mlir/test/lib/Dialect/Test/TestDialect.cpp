@@ -354,6 +354,24 @@ struct TestInlinerInterface : public DialectInlinerInterface {
     return builder.create<TestCastOp>(conversionLoc, resultType, input);
   }
 
+  Value handleArgument(OpBuilder &builder, Operation *call, Operation *callable,
+                       Value argument, Type targetType,
+                       DictionaryAttr argumentAttrs) const final {
+    if (!argumentAttrs.contains("test.handle_argument"))
+      return argument;
+    return builder.create<TestTypeChangerOp>(call->getLoc(), targetType,
+                                             argument);
+  }
+
+  Value handleResult(OpBuilder &builder, Operation *call, Operation *callable,
+                     Value result, Type targetType,
+                     DictionaryAttr resultAttrs) const final {
+    if (!resultAttrs.contains("test.handle_result"))
+      return result;
+    return builder.create<TestTypeChangerOp>(call->getLoc(), targetType,
+                                             result);
+  }
+
   void processInlinedCallBlocks(
       Operation *call,
       iterator_range<Region::iterator> inlinedBlocks) const final {
