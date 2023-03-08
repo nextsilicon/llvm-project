@@ -901,4 +901,21 @@ def LLVM_VPSIToFPOp : LLVM_VPCastI<"sitofp">;
 def LLVM_VPPtrToIntOp : LLVM_VPCastPtr<"ptrtoint">;
 def LLVM_VPIntToPtrOp : LLVM_VPCastI<"inttoptr">;
 
+/// Base operation for lifetime markers. The LLVM intrinsics require the size
+/// operand to be an immediate. In MLIR it is encoded as an attribute.
+class LLVM_NoaliasScopeDecl : LLVM_ZeroResultIntrOp<"experimental.noalias.scope.decl"> {
+  let arguments = (ins SymbolRefArrayAttr:$noalias_scopes);
+
+  // Custom builder to convert the size attribute to an integer.
+  //let llvmBuilder = [{
+  //  llvm::Module *module = builder.GetInsertBlock()->getModule();
+  //  llvm::Function *fn = llvm::Intrinsic::getDeclaration(
+  //      module, llvm::Intrinsic::}] # llvmEnumName # [{, {}] #
+  //      !interleave(ListIntSubst<LLVM_IntrPatterns.operand, [0]>.lst, ", ")
+  //      # [{});
+  //  builder.CreateCall(fn, {builder.getInt64(op.getSizeAttr().getInt()),
+  //                          moduleTranslation.lookupValue(op.getPtr())});
+  //}];
+}
+
 #endif // LLVM_INTRINSIC_OP
