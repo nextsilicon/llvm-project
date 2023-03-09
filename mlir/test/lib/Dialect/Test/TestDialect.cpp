@@ -195,6 +195,14 @@ struct TestInlinerInterface : public DialectInlinerInterface {
     // Don't allow inlining calls that are marked `noinline`.
     return !call->hasAttr("noinline");
   }
+  bool isTypeConvertible(Operation *call, Operation *callable, Type sourceType,
+                         Type targetType, DictionaryAttr argOrResAttrs,
+                         bool isResult) const final {
+    return (sourceType.isSignlessInteger(16) ||
+            sourceType.isSignlessInteger(32)) &&
+           (targetType.isSignlessInteger(16) ||
+            targetType.isSignlessInteger(32));
+  }
   bool isLegalToInline(Region *, Region *, bool, IRMapping &) const final {
     // Inlining into test dialect regions is legal.
     return true;
@@ -228,39 +236,31 @@ struct TestInlinerInterface : public DialectInlinerInterface {
       valuesToRepl[it.index()].replaceAllUsesWith(it.value());
   }
 
-  /// Attempt to materialize a conversion for a type mismatch between a call
-  /// from this dialect, and a callable region. This method should generate an
-  /// operation that takes 'input' as the only operand, and produces a single
-  /// result of 'resultType'. If a conversion can not be generated, nullptr
-  /// should be returned.
-  Operation *materializeCallConversion(OpBuilder &builder, Value input,
-                                       Type resultType,
-                                       Location conversionLoc) const final {
-    // Only allow conversion for i16/i32 types.
-    if (!(resultType.isSignlessInteger(16) ||
-          resultType.isSignlessInteger(32)) ||
-        !(input.getType().isSignlessInteger(16) ||
-          input.getType().isSignlessInteger(32)))
-      return nullptr;
-    return builder.create<TestCastOp>(conversionLoc, resultType, input);
-  }
-
   Value handleArgument(OpBuilder &builder, Operation *call, Operation *callable,
                        Value argument, Type targetType,
                        DictionaryAttr argumentAttrs) const final {
-    if (!argumentAttrs.contains("test.handle_argument"))
+    // Cast if an attribute is present.
+    if (argumentAttrs.contains("test.handle_argument"))
+      return builder.create<TestTypeChangerOp>(call->getLoc(), targetType,
+                                               argument);
+
+    // Cast only if the types do not match.
+    if (argument.getType() == targetType)
       return argument;
-    return builder.create<TestTypeChangerOp>(call->getLoc(), targetType,
-                                             argument);
+    return builder.create<TestCastOp>(call->getLoc(), targetType, argument);
   }
 
   Value handleResult(OpBuilder &builder, Operation *call, Operation *callable,
                      Value result, Type targetType,
                      DictionaryAttr resultAttrs) const final {
-    if (!resultAttrs.contains("test.handle_result"))
+    // Cast if an attribute is present.
+    if (resultAttrs.contains("test.handle_result"))
+      return builder.create<TestTypeChangerOp>(call->getLoc(), targetType,
+                                               result);
+    // Cast only if the types do not match.
+    if (result.getType() == targetType)
       return result;
-    return builder.create<TestTypeChangerOp>(call->getLoc(), targetType,
-                                             result);
+    return builder.create<TestCastOp>(call->getLoc(), targetType, result);
   }
 
   void processInlinedCallBlocks(
