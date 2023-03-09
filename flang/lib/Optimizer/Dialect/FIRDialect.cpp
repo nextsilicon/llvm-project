@@ -46,13 +46,6 @@ struct FIRInlinerInterface : public mlir::DialectInlinerInterface {
     for (const auto &it : llvm::enumerate(returnOp.getOperands()))
       valuesToRepl[it.index()].replaceAllUsesWith(it.value());
   }
-
-  mlir::Operation *materializeCallConversion(mlir::OpBuilder &builder,
-                                             mlir::Value input,
-                                             mlir::Type resultType,
-                                             mlir::Location loc) const final {
-    return builder.create<fir::ConvertOp>(loc, resultType, input);
-  }
 };
 } // namespace
 

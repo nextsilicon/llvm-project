@@ -85,6 +85,22 @@ public:
     return false;
   }
 
+  /// Returns true if `sourceType`, either a call argument type or a callee
+  /// result type, can be converted to `targetType`, or false otherwise. This
+  /// hook is only called for arguments and results that require type conversion
+  /// for inlining. It executes right before the `isLegalToInline` method, which
+  /// checks if a callable can be inlined in-place of a call. The `call` is
+  /// registered to the current dialect and implements `CallOpInterface`, while
+  /// the `callable` implements `CallableOpInterface`. The `argOrResAttrs`
+  /// dictionary contains the argument or result attributes and is guaranteed to
+  /// be non-null even if no attributes are present.
+  virtual bool isTypeConvertible(Operation *call, Operation *callable,
+                                 Type sourceType, Type targetType,
+                                 DictionaryAttr argOrResAttrs,
+                                 bool isResult) const {
+    return false;
+  }
+
   /// This hook is invoked on an operation that contains regions. It should
   /// return true if the analyzer should recurse within the regions of this
   /// operation when computing legality and cost, false otherwise. The default
@@ -121,37 +137,15 @@ public:
         "must implement handleTerminator in the case of one inlined block");
   }
 
-  /// Attempt to materialize a conversion for a type mismatch between a call
-  /// from this dialect, and a callable region. This method should generate an
-  /// operation that takes 'input' as the only operand, and produces a single
-  /// result of 'resultType'. If a conversion can not be generated, nullptr
-  /// should be returned. For example, this hook may be invoked in the following
-  /// scenarios:
-  ///   func @foo(i32) -> i32 { ... }
-  ///
-  ///   // Mismatched input operand
-  ///   ... = foo.call @foo(%input : i16) -> i32
-  ///
-  ///   // Mismatched result type.
-  ///   ... = foo.call @foo(%input : i32) -> i16
-  ///
-  /// NOTE: This hook may be invoked before the 'isLegal' checks above.
-  virtual Operation *materializeCallConversion(OpBuilder &builder, Value input,
-                                               Type resultType,
-                                               Location conversionLoc) const {
-    return nullptr;
-  }
-
   /// Hook to transform the call arguments before using them to replace the
   /// callee arguments. It returns the transformation result or `argument`
   /// itself if the hook did not change anything. The type of the returned value
   /// has to match `targetType`, and the `argumentAttrs` dictionary is non-null
-  /// even if no attribute is present. The hook is called after converting the
-  /// callsite argument types using the materializeCallConversion callback, and
-  /// right before inlining the callee region. Any operations created using the
-  /// provided `builder` are inserted right before the inlined callee region.
-  /// Example use cases are the insertion of copies for by value arguments, or
-  /// integer conversions that require signedness information.
+  /// even if no attributes are present. The hook is called right before
+  /// inlining the callee region. Any operations created using the provided
+  /// `builder` are inserted right before the inlined callee region. Example use
+  /// cases are the insertion of copies for by value arguments, or integer
+  /// conversions that require signedness information.
   virtual Value handleArgument(OpBuilder &builder, Operation *call,
                                Operation *callable, Value argument,
                                Type targetType,
@@ -163,12 +157,11 @@ public:
   /// results. It returns the transformation result or the `result` itself if
   /// the hook did not change anything. The type of the returned values has to
   /// match `targetType`, and the `resultAttrs` dictionary is non-null even if
-  /// no attribute is present. The hook is called right before handling
-  /// terminators, and obtains the callee result before converting its type
-  /// using the `materializeCallConversion` callback. Any operations created
-  /// using the provided `builder` are inserted right after the inlined callee
-  /// region. Example use cases are the insertion of copies for by value results
-  /// or integer conversions that require signedness information.
+  /// no attributes are present. The hook is called right before handling
+  /// terminators. Any operations created using the provided `builder` are
+  /// inserted right after the inlined callee region. Example use cases are the
+  /// insertion of copies for by value results or integer conversions that
+  /// require signedness information.
   /// NOTE: This hook is invoked after inlining the `callable` region.
   virtual Value handleResult(OpBuilder &builder, Operation *call,
                              Operation *callable, Value result, Type targetType,
@@ -209,6 +202,10 @@ public:
                                IRMapping &valueMapping) const;
   virtual bool isLegalToInline(Operation *op, Region *dest, bool wouldBeCloned,
                                IRMapping &valueMapping) const;
+  virtual bool isTypeConvertible(Operation *call, Operation *callable,
+                                 Type sourceType, Type targetType,
+                                 DictionaryAttr argOrResAttrs,
+                                 bool isResult) const;
   virtual bool shouldAnalyzeRecursively(Operation *op) const;
 
   //===--------------------------------------------------------------------===//

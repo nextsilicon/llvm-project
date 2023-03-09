@@ -110,15 +110,15 @@ func.func @no_inline_recursive() {
 }
 
 // Check that we can convert types for inputs and results as necessary.
-func.func @convert_callee_fn(%arg : i32) -> i32 {
-  return %arg : i32
+test.conversion_func_op @convert_callee_fn(%arg : i32) -> i32 {
+  "test.return"(%arg) : (i32) -> ()
 }
-func.func @convert_callee_fn_multi_arg(%a : i32, %b : i32) -> () {
-  return
+test.conversion_func_op @convert_callee_fn_multi_arg(%a : i32, %b : i32) -> () {
+  "test.return"() : () -> ()
 }
-func.func @convert_callee_fn_multi_res() -> (i32, i32) {
+test.conversion_func_op @convert_callee_fn_multi_res() -> (i32, i32) {
   %res = arith.constant 0 : i32
-  return %res, %res : i32, i32
+  "test.return"(%res, %res) : (i32, i32) -> ()
 }
 
 // CHECK-LABEL: func @inline_convert_call
@@ -133,24 +133,24 @@ func.func @inline_convert_call() -> i16 {
   return %res : i16
 }
 
-func.func @convert_callee_fn_multiblock() -> i32 {
-  cf.br ^bb0
+test.conversion_func_op @convert_callee_fn_multiblock(%arg0 : i32) -> i32 {
+  "test.br"()[^bb0] : () -> ()
 ^bb0:
-  %0 = arith.constant 0 : i32
-  return %0 : i32
+  "test.return"(%arg0) : (i32) -> ()
 }
 
 // CHECK-LABEL: func @inline_convert_result_multiblock
 func.func @inline_convert_result_multiblock() -> i16 {
-// CHECK:   cf.br ^bb1 {inlined_conversion}
-// CHECK: ^bb1:
-// CHECK:   %[[C:.+]] = arith.constant {inlined_conversion} 0 : i32
-// CHECK:   cf.br ^bb2(%[[C]] : i32)
-// CHECK: ^bb2(%[[BBARG:.+]]: i32):
-// CHECK:   %[[CAST_RESULT:.+]] = "test.cast"(%[[BBARG]]) : (i32) -> i16
-// CHECK:   return %[[CAST_RESULT]] : i16
-
-  %res = "test.conversion_call_op"() { callee=@convert_callee_fn_multiblock } : () -> (i16)
+  // CHECK:   %[[INPUT:.+]] = arith.constant
+  // CHECK:   %[[CAST_INPUT:.+]] = "test.cast"(%[[INPUT]]) : (i16) -> i32
+  // CHECK:   "test.br"()[^bb1] {inlined_conversion} : () -> ()
+  // CHECK: ^bb1:
+  // CHECK:   "test.br"(%[[CAST_INPUT]])[^bb2] : (i32) -> ()
+  // CHECK: ^bb2(%[[BBARG:.+]]: i32):
+  // CHECK:   %[[CAST_RESULT:.+]] = "test.cast"(%[[BBARG]]) : (i32) -> i16
+  // CHECK:   return %[[CAST_RESULT]] : i16
+  %test_input = arith.constant 0 : i16
+  %res = "test.conversion_call_op"(%test_input) { callee=@convert_callee_fn_multiblock } : (i16) -> (i16)
   return %res : i16
 }
 
@@ -233,9 +233,6 @@ test.conversion_func_op @handle_attr_callee_fn_multi_arg(%arg0 : i16, %arg1 : i1
   %1 = arith.subi %arg0, %arg1 : i16
   "test.return"(%0, %1) : (i16, i16) -> ()
 }
-test.conversion_func_op @handle_attr_callee_fn(%arg0 : i32 {"test.handle_argument"}) -> (i32 {"test.handle_result"}) {
-  "test.return"(%arg0) : (i32) -> ()
-}
 
 // CHECK-LABEL: func @inline_handle_attr_call
 // CHECK-SAME: %[[ARG0:[a-zA-Z0-9]+]]
@@ -249,17 +246,4 @@ func.func @inline_handle_attr_call(%arg0 : i16, %arg1 : i16) -> (i16, i16) {
   // CHECK-NEXT: return %[[CHANGE_RESULT]], %[[DIFF]]
   %res0, %res1 = "test.conversion_call_op"(%arg0, %arg1) { callee=@handle_attr_callee_fn_multi_arg } : (i16, i16) -> (i16, i16)
   return %res0, %res1 : i16, i16
-}
-
-// CHECK-LABEL: func @inline_convert_and_handle_attr_call
-// CHECK-SAME: %[[ARG0:[a-zA-Z0-9]+]]
-func.func @inline_convert_and_handle_attr_call(%arg0 : i16) -> (i16) {
-
-  // CHECK: %[[CAST_INPUT:.*]] = "test.cast"(%[[ARG0]]) : (i16) -> i32
-  // CHECK: %[[CHANGE_INPUT:.*]] = "test.type_changer"(%[[CAST_INPUT]]) : (i32) -> i32
-  // CHECK: %[[CHANGE_RESULT:.*]] = "test.type_changer"(%[[CHANGE_INPUT]]) : (i32) -> i32
-  // CHECK: %[[CAST_RESULT:.*]] = "test.cast"(%[[CHANGE_RESULT]]) : (i32) -> i16
-  // CHECK: return %[[CAST_RESULT]]
-  %res = "test.conversion_call_op"(%arg0) { callee=@handle_attr_callee_fn } : (i16) -> (i16)
-  return %res : i16
 }

@@ -54,6 +54,13 @@ struct ToyInlinerInterface : public DialectInlinerInterface {
     return true;
   }
 
+  /// All argument and result types within toy are convertible.
+  bool isTypeConvertible(Operation *call, Operation *callable, Type sourceType,
+                         Type targetType, DictionaryAttr argOrResAttrs,
+                         bool isResult) const final {
+    return true;
+  }
+
   //===--------------------------------------------------------------------===//
   // Transformation Hooks
   //===--------------------------------------------------------------------===//
@@ -71,15 +78,26 @@ struct ToyInlinerInterface : public DialectInlinerInterface {
       valuesToRepl[it.index()].replaceAllUsesWith(it.value());
   }
 
-  /// Attempts to materialize a conversion for a type mismatch between a call
-  /// from this dialect, and a callable region. This method should generate an
-  /// operation that takes 'input' as the only operand, and produces a single
-  /// result of 'resultType'. If a conversion can not be generated, nullptr
-  /// should be returned.
-  Operation *materializeCallConversion(OpBuilder &builder, Value input,
-                                       Type resultType,
-                                       Location conversionLoc) const final {
-    return builder.create<CastOp>(conversionLoc, resultType, input);
+  /// Handle possible type mismatches between the arguments of call and
+  /// callable. This handler introduces a cast operation if the argument type
+  /// differs from the target type.
+  Value handleArgument(OpBuilder &builder, Operation *call, Operation *callable,
+                       Value argument, Type targetType,
+                       DictionaryAttr argumentAttrs) const final {
+    if (argument.getType() == targetType)
+      return argument;
+    return builder.create<CastOp>(call->getLoc(), targetType, argument);
+  }
+
+  /// Handle possible type mismatches between the results of callable and call.
+  /// This handler introduces a cast operation if the result type differs from
+  /// the target type.
+  Value handleResult(OpBuilder &builder, Operation *call, Operation *callable,
+                     Value result, Type targetType,
+                     DictionaryAttr resultAttrs) const final {
+    if (result.getType() == targetType)
+      return result;
+    return builder.create<CastOp>(call->getLoc(), targetType, result);
   }
 };
 
