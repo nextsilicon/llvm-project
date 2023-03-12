@@ -81,6 +81,16 @@ bool InlinerInterface::isLegalToInline(Operation *op, Region *dest,
   return false;
 }
 
+bool InlinerInterface::isTypeConvertible(Operation *call, Operation *callable,
+                                         Type sourceType, Type targetType,
+                                         DictionaryAttr argOrResAttrs,
+                                         bool isResult) const {
+  if (auto *handler = getInterfaceFor(call))
+    return handler->isTypeConvertible(call, callable, sourceType, targetType,
+                                      argOrResAttrs, isResult);
+  return false;
+}
+
 bool InlinerInterface::shouldAnalyzeRecursively(Operation *op) const {
   auto *handler = getInterfaceFor(op);
   return handler ? handler->shouldAnalyzeRecursively(op) : true;
@@ -161,6 +171,36 @@ static bool isLegalToInline(InlinerInterface &interface, Region *src,
 // Inline Methods
 //===----------------------------------------------------------------------===//
 
+/// Returns the array of argument attribute dictionaries. The attribute
+/// dictionaries are non-null even if no attributes are present.
+static SmallVector<DictionaryAttr>
+getArgumentAttributes(CallableOpInterface callable) {
+  SmallVector<DictionaryAttr> argAttrs(
+      callable.getCallableRegion()->getNumArguments(),
+      DictionaryAttr::get(callable->getContext(), {}));
+  if (ArrayAttr arrayAttr = callable.getCallableArgAttrs()) {
+    assert(arrayAttr.size() == argAttrs.size());
+    for (auto [idx, attr] : llvm::enumerate(arrayAttr))
+      argAttrs[idx] = cast<DictionaryAttr>(attr);
+  }
+  return argAttrs;
+}
+
+/// Returns the array of result attribute dictionaries. The attribute
+/// dictionaries are non-null even if no attributes are present.
+static SmallVector<DictionaryAttr>
+getResultAttributes(CallableOpInterface callable) {
+  SmallVector<DictionaryAttr> resAttrs(
+      callable.getCallableResults().size(),
+      DictionaryAttr::get(callable->getContext(), {}));
+  if (ArrayAttr arrayAttr = callable.getCallableResAttrs()) {
+    assert(arrayAttr.size() == resAttrs.size());
+    for (auto [idx, attr] : llvm::enumerate(arrayAttr))
+      resAttrs[idx] = cast<DictionaryAttr>(attr);
+  }
+  return resAttrs;
+}
+
 static void handleArgumentImpl(InlinerInterface &interface, OpBuilder &builder,
                                CallOpInterface call,
                                CallableOpInterface callable,
@@ -168,19 +208,12 @@ static void handleArgumentImpl(InlinerInterface &interface, OpBuilder &builder,
   if (!call || !callable)
     return;
 
-  // Unpack the argument attributes if there are any.
-  SmallVector<DictionaryAttr> argAttrs(
-      callable.getCallableRegion()->getNumArguments(),
-      builder.getDictionaryAttr({}));
-  if (ArrayAttr arrayAttr = callable.getCallableArgAttrs()) {
-    assert(arrayAttr.size() == argAttrs.size());
-    for (auto [idx, attr] : llvm::enumerate(arrayAttr))
-      argAttrs[idx] = dyn_cast<DictionaryAttr>(attr);
-  }
+  // Unpack the argument attributes.
+  SmallVector<DictionaryAttr> argAttrs = getArgumentAttributes(callable);
 
   // Run the argument attribute handler for the given argument and attribute.
-  for (auto [blockArg, argAttr] :
-       llvm::zip(callable.getCallableRegion()->getArguments(), argAttrs)) {
+  for (auto [blockArg, argAttr] : llvm::zip_equal(
+           callable.getCallableRegion()->getArguments(), argAttrs)) {
     Value newArgument = interface.handleArgument(builder, call, callable,
                                                  mapper.lookup(blockArg),
                                                  blockArg.getType(), argAttr);
@@ -198,31 +231,21 @@ static void handleResultImpl(InlinerInterface &interface, OpBuilder &builder,
   if (!call || !callable)
     return;
 
-  // Unpack the result attributes if there are any.
-  SmallVector<DictionaryAttr> resAttrs(results.size(),
-                                       builder.getDictionaryAttr({}));
-  if (ArrayAttr arrayAttr = callable.getCallableResAttrs()) {
-    assert(arrayAttr.size() == resAttrs.size());
-    for (auto [idx, attr] : llvm::enumerate(arrayAttr))
-      resAttrs[idx] = dyn_cast<DictionaryAttr>(attr);
-  }
+  // Unpack the result attributes.
+  SmallVector<DictionaryAttr> resAttrs = getResultAttributes(callable);
 
   // Run the result attribute handler for the given result and attribute.
   SmallVector<DictionaryAttr> resultAttributes;
-  for (auto [result, resAttr] : llvm::zip(results, resAttrs)) {
+  for (auto [result, resAttr, callResult] :
+       llvm::zip_equal(results, resAttrs, call->getResults())) {
     // Store the original result users before running the handler.
     DenseSet<Operation *> resultUsers;
     for (Operation *user : result.getUsers())
       resultUsers.insert(user);
 
-    // TODO: Use the type of the call result to replace once the hook can be
-    // used for type conversions. At the moment, all type conversions have to be
-    // done using materializeCallConversion.
-    Type targetType = result.getType();
-
     Value newResult = interface.handleResult(builder, call, callable, result,
-                                             targetType, resAttr);
-    assert(newResult.getType() == targetType &&
+                                             callResult.getType(), resAttr);
+    assert(newResult.getType() == callResult.getType() &&
            "expected the handled result type to match the target type");
 
     // Replace the result uses except for the ones introduce by the handler.
@@ -410,28 +433,6 @@ LogicalResult mlir::inlineRegion(InlinerInterface &interface, Region *src,
                           shouldCloneInlinedRegion);
 }
 
-/// Utility function used to generate a cast operation from the given interface,
-/// or return nullptr if a cast could not be generated.
-static Value materializeConversion(const DialectInlinerInterface *interface,
-                                   SmallVectorImpl<Operation *> &castOps,
-                                   OpBuilder &castBuilder, Value arg, Type type,
-                                   Location conversionLoc) {
-  if (!interface)
-    return nullptr;
-
-  // Check to see if the interface for the call can materialize a conversion.
-  Operation *castOp = interface->materializeCallConversion(castBuilder, arg,
-                                                           type, conversionLoc);
-  if (!castOp)
-    return nullptr;
-  castOps.push_back(castOp);
-
-  // Ensure that the generated cast is correct.
-  assert(castOp->getNumOperands() == 1 && castOp->getOperand(0) == arg &&
-         castOp->getNumResults() == 1 && *castOp->result_type_begin() == type);
-  return castOp->getResult(0);
-}
-
 /// This function inlines a given region, 'src', of a callable operation,
 /// 'callable', into the location defined by the given call operation. This
 /// function returns failure if inlining is not possible, success otherwise. On
@@ -456,69 +457,43 @@ LogicalResult mlir::inlineCall(InlinerInterface &interface,
       callResults.size() != callableResultTypes.size())
     return failure();
 
-  // A set of cast operations generated to matchup the signature of the region
-  // with the signature of the call.
-  SmallVector<Operation *, 4> castOps;
-  castOps.reserve(callOperands.size() + callResults.size());
-
-  // Functor used to cleanup generated state on failure.
-  auto cleanupState = [&] {
-    for (auto *op : castOps) {
-      op->getResult(0).replaceAllUsesWith(op->getOperand(0));
-      op->erase();
-    }
-    return failure();
-  };
-
-  // Builder used for any conversion operations that need to be materialized.
-  OpBuilder castBuilder(call);
-  Location castLoc = call.getLoc();
-  const auto *callInterface = interface.getInterfaceFor(call->getDialect());
-
-  // Map the provided call operands to the arguments of the region.
-  IRMapping mapper;
-  for (unsigned i = 0, e = callOperands.size(); i != e; ++i) {
-    BlockArgument regionArg = entryBlock->getArgument(i);
-    Value operand = callOperands[i];
-
-    // If the call operand doesn't match the expected region argument, try to
-    // generate a cast.
-    Type regionArgType = regionArg.getType();
-    if (operand.getType() != regionArgType) {
-      if (!(operand = materializeConversion(callInterface, castOps, castBuilder,
-                                            operand, regionArgType, castLoc)))
-        return cleanupState();
-    }
-    mapper.map(regionArg, operand);
+  // Check that argument types are convertible.
+  SmallVector<DictionaryAttr> argAttrs = getArgumentAttributes(callable);
+  for (auto [argumentType, targetType, argumentAttrs] :
+       llvm::zip_equal(call.getArgOperands().getTypes(),
+                       entryBlock->getArgumentTypes(), argAttrs)) {
+    if (argumentType == targetType)
+      continue;
+    if (!interface.isTypeConvertible(call, callable, argumentType, targetType,
+                                     argumentAttrs, false))
+      return failure();
   }
 
-  // Ensure that the resultant values of the call match the callable.
-  castBuilder.setInsertionPointAfter(call);
-  for (unsigned i = 0, e = callResults.size(); i != e; ++i) {
-    Value callResult = callResults[i];
-    if (callResult.getType() == callableResultTypes[i])
+  // Check that result types are convertible.
+  SmallVector<DictionaryAttr> resAttrs = getResultAttributes(callable);
+  for (auto [resultType, targetType, resultAttrs] :
+       llvm::zip_equal(callableResultTypes, call->getResultTypes(), resAttrs)) {
+    if (resultType == targetType)
       continue;
-
-    // Generate a conversion that will produce the original type, so that the IR
-    // is still valid after the original call gets replaced.
-    Value castResult =
-        materializeConversion(callInterface, castOps, castBuilder, callResult,
-                              callResult.getType(), castLoc);
-    if (!castResult)
-      return cleanupState();
-    callResult.replaceAllUsesWith(castResult);
-    castResult.getDefiningOp()->replaceUsesOfWith(castResult, callResult);
+    if (!interface.isTypeConvertible(call, callable, resultType, targetType,
+                                     resultAttrs, true))
+      return failure();
   }
 
   // Check that it is legal to inline the callable into the call.
   if (!interface.isLegalToInline(call, callable, shouldCloneInlinedRegion))
-    return cleanupState();
+    return failure();
+
+  IRMapping mapper;
+  for (auto [blockArg, operand] :
+       llvm::zip(entryBlock->getArguments(), callOperands))
+    mapper.map(blockArg, operand);
 
   // Attempt to inline the call.
   if (failed(inlineRegionImpl(interface, src, call->getBlock(),
                               ++call->getIterator(), mapper, callResults,
                               callableResultTypes, call.getLoc(),
                               shouldCloneInlinedRegion, call)))
-    return cleanupState();
+    return failure();
   return success();
 }

@@ -233,9 +233,6 @@ func.func @handle_attr_callee_fn_multi_arg(%arg0 : i16, %arg1 : i16 {"test.handl
   %1 = arith.subi %arg0, %arg1 : i16
   return %0, %1 : i16, i16
 }
-func.func @handle_attr_callee_fn(%arg0 : i32 {"test.handle_argument"}) -> (i32 {"test.handle_result"}) {
-  return %arg0 : i32
-}
 
 // CHECK-LABEL: func @inline_handle_attr_call
 // CHECK-SAME: %[[ARG0:[a-zA-Z0-9]+]]
@@ -249,17 +246,4 @@ func.func @inline_handle_attr_call(%arg0 : i16, %arg1 : i16) -> (i16, i16) {
   // CHECK-NEXT: return %[[CHANGE_RESULT]], %[[DIFF]]
   %res0, %res1 = "test.conversion_call_op"(%arg0, %arg1) { callee=@handle_attr_callee_fn_multi_arg } : (i16, i16) -> (i16, i16)
   return %res0, %res1 : i16, i16
-}
-
-// CHECK-LABEL: func @inline_convert_and_handle_attr_call
-// CHECK-SAME: %[[ARG0:[a-zA-Z0-9]+]]
-func.func @inline_convert_and_handle_attr_call(%arg0 : i16) -> (i16) {
-
-  // CHECK: %[[CAST_INPUT:.*]] = "test.cast"(%[[ARG0]]) : (i16) -> i32
-  // CHECK: %[[CHANGE_INPUT:.*]] = "test.type_changer"(%[[CAST_INPUT]]) : (i32) -> i32
-  // CHECK: %[[CHANGE_RESULT:.*]] = "test.type_changer"(%[[CHANGE_INPUT]]) : (i32) -> i32
-  // CHECK: %[[CAST_RESULT:.*]] = "test.cast"(%[[CHANGE_RESULT]]) : (i32) -> i16
-  // CHECK: return %[[CAST_RESULT]]
-  %res = "test.conversion_call_op"(%arg0) { callee=@handle_attr_callee_fn } : (i16) -> (i16)
-  return %res : i16
 }

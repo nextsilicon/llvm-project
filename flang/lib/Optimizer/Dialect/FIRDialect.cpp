@@ -35,6 +35,14 @@ struct FIRInlinerInterface : public mlir::DialectInlinerInterface {
     return fir::canLegallyInline(op, reg, wouldBeCloned, map);
   }
 
+  /// This hook checks if `sourceType` is convertible to `targetType`.
+  bool isTypeConvertible(mlir::Operation *call, mlir::Operation *callable,
+                         mlir::Type sourceType, mlir::Type targetType,
+                         mlir::DictionaryAttr argOrResAttrs,
+                         bool isResult) const final {
+    return true;
+  }
+
   /// This hook is called when a terminator operation has been inlined.
   /// We handle the return (a Fortran FUNCTION) by replacing the values
   /// previously returned by the call operation with the operands of the
@@ -47,11 +55,24 @@ struct FIRInlinerInterface : public mlir::DialectInlinerInterface {
       valuesToRepl[it.index()].replaceAllUsesWith(it.value());
   }
 
-  mlir::Operation *materializeCallConversion(mlir::OpBuilder &builder,
-                                             mlir::Value input,
-                                             mlir::Type resultType,
-                                             mlir::Location loc) const final {
-    return builder.create<fir::ConvertOp>(loc, resultType, input);
+  /// This hook converts the `argument` to `targetType` if needed.
+  mlir::Value handleArgument(mlir::OpBuilder &builder, mlir::Operation *call,
+                             mlir::Operation *callable, mlir::Value argument,
+                             mlir::Type targetType,
+                             mlir::DictionaryAttr argumentAttrs) const final {
+    // The convert operation folds if the argument type matches the target type.
+    return builder.createOrFold<fir::ConvertOp>(call->getLoc(), targetType,
+                                                argument);
+  }
+
+  /// This hook converts the `result` to `targetType` if needed.
+  mlir::Value handleResult(mlir::OpBuilder &builder, mlir::Operation *call,
+                           mlir::Operation *callable, mlir::Value result,
+                           mlir::Type targetType,
+                           mlir::DictionaryAttr resultAttrs) const final {
+    // The convert operation folds if the result type matches the target type.
+    return builder.createOrFold<fir::ConvertOp>(call->getLoc(), targetType,
+                                                result);
   }
 };
 } // namespace
