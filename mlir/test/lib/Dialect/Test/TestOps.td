@@ -492,6 +492,12 @@ def FunctionalRegionOp : TEST_Op<"functional_region_op",
     ::llvm::ArrayRef<::mlir::Type> getCallableResults() {
       return getType().cast<::mlir::FunctionType>().getResults();
     }
+    ::mlir::ArrayAttr getCallableArgAttrs() {
+      return nullptr;
+    }
+    ::mlir::ArrayAttr getCallableResAttrs() {
+      return nullptr;
+    }
   }];
 }
 

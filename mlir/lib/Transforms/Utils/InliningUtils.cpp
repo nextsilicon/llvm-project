@@ -165,9 +165,6 @@ static void handleArgumentImpl(InlinerInterface &interface, OpBuilder &builder,
                                CallOpInterface call,
                                CallableOpInterface callable,
                                IRMapping &mapper) {
-  if (!call || !callable)
-    return;
-
   // Unpack the argument attributes if there are any.
   SmallVector<DictionaryAttr> argAttrs(
       callable.getCallableRegion()->getNumArguments(),
@@ -195,9 +192,6 @@ static void handleArgumentImpl(InlinerInterface &interface, OpBuilder &builder,
 static void handleResultImpl(InlinerInterface &interface, OpBuilder &builder,
                              CallOpInterface call, CallableOpInterface callable,
                              ValueRange results) {
-  if (!call || !callable)
-    return;
-
   // Unpack the result attributes if there are any.
   SmallVector<DictionaryAttr> resAttrs(results.size(),
                                        builder.getDictionaryAttr({}));
@@ -260,7 +254,8 @@ inlineRegionImpl(InlinerInterface &interface, Region *src, Block *inlineBlock,
   // Run the argument attribute handler before inlining the callable region.
   OpBuilder builder(inlineBlock, inlinePoint);
   auto callable = dyn_cast<CallableOpInterface>(src->getParentOp());
-  handleArgumentImpl(interface, builder, call, callable, mapper);
+  if (call && callable)
+    handleArgumentImpl(interface, builder, call, callable, mapper);
 
   // Check to see if the region is being cloned, or moved inline. In either
   // case, move the new blocks after the 'insertBlock' to improve IR
@@ -298,8 +293,9 @@ inlineRegionImpl(InlinerInterface &interface, Region *src, Block *inlineBlock,
     // Run the result attribute handler on the terminator operands.
     Operation *firstBlockTerminator = firstNewBlock->getTerminator();
     builder.setInsertionPoint(firstBlockTerminator);
-    handleResultImpl(interface, builder, call, callable,
-                     firstBlockTerminator->getOperands());
+    if (call && callable)
+      handleResultImpl(interface, builder, call, callable,
+                       firstBlockTerminator->getOperands());
 
     // Have the interface handle the terminator of this block.
     interface.handleTerminator(firstBlockTerminator,
@@ -321,8 +317,9 @@ inlineRegionImpl(InlinerInterface &interface, Region *src, Block *inlineBlock,
 
     // Run the result attribute handler on the post insertion block arguments.
     builder.setInsertionPointToStart(postInsertBlock);
-    handleResultImpl(interface, builder, call, callable,
-                     postInsertBlock->getArguments());
+    if (call && callable)
+      handleResultImpl(interface, builder, call, callable,
+                       postInsertBlock->getArguments());
 
     /// Handle the terminators for each of the new blocks.
     for (auto &newBlock : newBlocks)
