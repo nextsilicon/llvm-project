@@ -228,13 +228,13 @@ func.func @func_with_block_args_location_callee2(%arg0 : i32) {
 }
 
 // Check that we can handle argument and result attributes.
-func.func @handle_attr_callee_fn_multi_arg(%arg0 : i16, %arg1 : i16 {"test.handle_argument"}) -> (i16 {"test.handle_result"}, i16) {
+test.conversion_func_op @handle_attr_callee_fn_multi_arg(%arg0 : i16, %arg1 : i16 {"test.handle_argument"}) -> (i16 {"test.handle_result"}, i16) {
   %0 = arith.addi %arg0, %arg1 : i16
   %1 = arith.subi %arg0, %arg1 : i16
-  return %0, %1 : i16, i16
+  "test.return"(%0, %1) : (i16, i16) -> ()
 }
-func.func @handle_attr_callee_fn(%arg0 : i32 {"test.handle_argument"}) -> (i32 {"test.handle_result"}) {
-  return %arg0 : i32
+test.conversion_func_op @handle_attr_callee_fn(%arg0 : i32 {"test.handle_argument"}) -> (i32 {"test.handle_result"}) {
+    "test.return"(%arg0) : (i32) -> ()
 }
 
 // CHECK-LABEL: func @inline_handle_attr_call

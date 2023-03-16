@@ -107,7 +107,7 @@ Value InlinerInterface::handleArgument(OpBuilder &builder, Operation *call,
                                        Operation *callable, Value argument,
                                        Type targetType,
                                        DictionaryAttr argumentAttrs) const {
-  auto *handler = getInterfaceFor(call);
+  auto *handler = getInterfaceFor(callable);
   assert(handler && "expected valid dialect handler");
   return handler->handleArgument(builder, call, callable, argument, targetType,
                                  argumentAttrs);
@@ -117,7 +117,7 @@ Value InlinerInterface::handleResult(OpBuilder &builder, Operation *call,
                                      Operation *callable, Value result,
                                      Type targetType,
                                      DictionaryAttr resultAttrs) const {
-  auto *handler = getInterfaceFor(call);
+  auto *handler = getInterfaceFor(callable);
   assert(handler && "expected valid dialect handler");
   return handler->handleResult(builder, call, callable, result, targetType,
                                resultAttrs);
