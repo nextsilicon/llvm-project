@@ -135,6 +135,9 @@ translateDataLayout(DataLayoutSpecInterface attribute,
               if (std::optional<unsigned> index = extractPointerSpecValue(
                       entry.getValue(), PtrDLEntryPos::Index))
                 layoutStream << ":" << *index;
+
+              // TODO print index / preferred only if needed?
+              // Omitting preferred requires omitting index
               return success();
             })
             .Default([loc](Type type) {

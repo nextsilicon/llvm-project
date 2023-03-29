@@ -12,6 +12,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Target/LLVMIR/ModuleImport.h"
+#include "mlir/IR/BuiltinAttributes.h"
+#include "mlir/IR/Diagnostics.h"
+#include "mlir/Support/LLVM.h"
+#include "mlir/Support/LogicalResult.h"
 #include "mlir/Target/LLVMIR/Import.h"
 
 #include "AttrKindDetail.h"
@@ -26,9 +30,13 @@
 #include "mlir/Tools/mlir-translate/Translation.h"
 
 #include "llvm/ADT/PostOrderIterator.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/ScopeExit.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/DataLayout.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Instructions.h"
@@ -36,6 +44,9 @@
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Operator.h"
 #include "llvm/Support/ModRef.h"
+#include <cstdint>
+#include <pthread.h>
+#include <string>
 
 using namespace mlir;
 using namespace mlir::LLVM;
@@ -82,18 +93,18 @@ static constexpr StringRef getGlobalMetadataOpName() {
 
 /// Returns a supported MLIR floating point type of the given bit width or null
 /// if the bit width is not supported.
-static FloatType getDLFloatType(MLIRContext &ctx, int32_t bitwidth) {
+static FloatType getFloatType(MLIRContext *context, int32_t bitwidth) {
   switch (bitwidth) {
   case 16:
-    return FloatType::getF16(&ctx);
+    return FloatType::getF16(context);
   case 32:
-    return FloatType::getF32(&ctx);
+    return FloatType::getF32(context);
   case 64:
-    return FloatType::getF64(&ctx);
+    return FloatType::getF64(context);
   case 80:
-    return FloatType::getF80(&ctx);
+    return FloatType::getF80(context);
   case 128:
-    return FloatType::getF128(&ctx);
+    return FloatType::getF128(context);
   default:
     return nullptr;
   }
@@ -148,103 +159,327 @@ static LogicalResult convertInstructionImpl(OpBuilder &odsBuilder,
   return failure();
 }
 
-/// Creates an attribute containing ABI and preferred alignment numbers parsed
-/// a string. The string may be either "abi:preferred" or just "abi". In the
-/// latter case, the preferred alignment is considered equal to ABI alignment.
-static DenseIntElementsAttr parseDataLayoutAlignment(MLIRContext &ctx,
-                                                     StringRef spec) {
-  auto i32 = IntegerType::get(&ctx, 32);
+// /// Parses a data layout specification of colon separated numbers and returns
+// an
+// /// integer list, or failure if the conversion fails.
+// static FailureOr<SmallVector<int32_t>> parseColonSeparatedSpec(StringRef
+// spec) {
+//   SmallVector<StringRef> tokens;
+//   spec.split(tokens, ':');
 
-  StringRef abiString, preferredString;
-  std::tie(abiString, preferredString) = spec.split(':');
-  int abi, preferred;
-  if (abiString.getAsInteger(/*Radix=*/10, abi))
-    return nullptr;
+//   // Parse an integer list.
+//   SmallVector<int32_t> results(tokens.size());
+//   for (auto [result, token] : llvm::zip(results, tokens))
+//     if (token.getAsInteger(/*Radix=*/10, result))
+//       return failure();
+//   return results;
+// }
 
-  if (preferredString.empty())
-    preferred = abi;
-  else if (preferredString.getAsInteger(/*Radix=*/10, preferred))
-    return nullptr;
+// /// Creates an attribute containing ABI and preferred alignment numbers
+// parsed
+// /// a string. The string may be either "abi:preferred" or just "abi". In the
+// /// latter case, the preferred alignment is considered equal to ABI
+// alignment. static DenseIntElementsAttr parseDataLayoutAlignment(MLIRContext
+// *context,
+//                                                      StringRef spec) {
+//   auto i32 = IntegerType::get(context, 32);
 
-  return DenseIntElementsAttr::get(VectorType::get({2}, i32), {abi, preferred});
-}
+//   StringRef abiString, preferredString;
+//   std::tie(abiString, preferredString) = spec.split(':');
+//   int abi, preferred;
+//   if (abiString.getAsInteger(/*Radix=*/10, abi))
+//     return nullptr;
 
-/// Translate the given LLVM data layout into an MLIR equivalent using the DLTI
-/// dialect.
-DataLayoutSpecInterface
-mlir::translateDataLayout(const llvm::DataLayout &dataLayout,
-                          MLIRContext *context) {
-  assert(context && "expected MLIR context");
-  std::string layoutstr = dataLayout.getStringRepresentation();
+//   if (preferredString.empty())
+//     preferred = abi;
+//   else if (preferredString.getAsInteger(/*Radix=*/10, preferred))
+//     return nullptr;
 
-  // Remaining unhandled default layout defaults
-  // e (little endian if not set)
-  // p[n]:64:64:64 (non zero address spaces have 64-bit properties)
-  // Alloca address space defaults to 0.
-  std::string append =
-      "p:64:64:64-S0-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f16:16:16-f64:"
-      "64:64-f128:128:128-v64:64:64-v128:128:128-a:0:64-A0";
-  if (layoutstr.empty())
-    layoutstr = append;
-  else
-    layoutstr = layoutstr + "-" + append;
+//   return DenseIntElementsAttr::get(VectorType::get({2}, i32), {abi,
+//   preferred});
+// }
 
-  StringRef layout(layoutstr);
+// static DataLayoutEntryAttr tryToTranslateEndianessEntry(MLIRContext *context,
+//                                                         StringRef kind,
+//                                                         StringRef spec) {
+//   if (!spec.empty() || kind.size() != 1)
+//     return nullptr;
+//   StringAttr value = nullptr;
+//   if (kind.front() == 'e')
+//     value = StringAttr::get(context,
+//     DLTIDialect::kDataLayoutEndiannessLittle);
+//   if (kind.front() == 'E')
+//     value = StringAttr::get(context, DLTIDialect::kDataLayoutEndiannessBig);
+//   if (!value)
+//     return nullptr;
+//   return DataLayoutEntryAttr::get(
+//       StringAttr::get(context, DLTIDialect::kDataLayoutEndiannessKey),
+//       value);
+// }
+
+// FailureOr<DataLayoutSpecInterface> mlir::translateDataLayout(
+//     const llvm::DataLayout &dataLayout, MLIRContext *context,
+//     function_ref<InFlightDiagnostic(StringRef)> emitErrorFn,
+//     function_ref<void(StringRef)> emitWarningFn) {
+//   // Transform the data layout to its string representation and append the
+//   // default data layout string specified in the language reference
+//   // (https://llvm.org/docs/LangRef.html#data-layout). The translation then
+//   // parses the string and ignores the default value if a specific kind
+//   occurs
+//   // in both strings. Additionally, the following default values exist:
+//   // - non-default address space pointer specifications default to the
+//   default
+//   //   address space pointer specification
+//   // - the alloca address space defaults to the default address space.
+//   std::string layoutStr = dataLayout.getStringRepresentation();
+//   if (!layoutStr.empty())
+//     layoutStr += "-";
+//   layoutStr += "e-p:64:64:64-S0-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-"
+//                "f16:16:16-f64:64:64-f128:128:128";
+//   StringRef layout(layoutStr);
+
+//   auto parseParameters =
+//       [](StringRef parameters) -> FailureOr<SmallVector<int32_t>> {
+//     SmallVector<StringRef> tokens;
+//     parameters.split(tokens, ':');
+
+//     // Parse an integer list.
+//     SmallVector<int32_t> results(tokens.size());
+//     for (auto [result, token] : llvm::zip(results, tokens))
+//       if (token.getAsInteger(/*Radix=*/10, result))
+//         return failure();
+//     return results;
+//   };
+
+//   SmallVector<DataLayoutEntryInterface> entries;
+//   StringSet<> seen;
+//   SmallVector<StringRef> tokens;
+//   layout.split(tokens, '-');
+//   for (StringRef token : tokens) {
+//     auto [kind, spec] = token.split(':');
+//     if (!seen.try_emplace(kind).second)
+//       continue;
+
+//     if (kind.consume_front("i")) {
+//       FailureOr<SmallVector<int32_t>> bitwidth = parseParameters(kind);
+//       if (failed(bitwidth) || bitwidth->size())
+//         return emitErrorFn(token);
+//       FailureOr<SmallVector<int32_t>> parameters = parseParameters(spec);
+//       if (failed(parameters) || parameters->empty() || parameters->size() <
+//       2)
+//         return emitErrorFn(token);
+//       int32_t abi = (*parameters)[0];
+//       int32_t pref = parameters->size() == 1 ? abi : (*parameters)[1];
+
+//       auto params = DenseIntElementsAttr::get(
+//           VectorType::get({2}, IntegerType::get(context, 32)), {abi, pref})
+//     }
+
+//     emitWarningFn(token);
+//   }
+
+//   // Use a string map?
+
+//   while (!layout.empty()) {
+//     // Split at '-'.
+//     std::pair<StringRef, StringRef> split = layout.split('-');
+//     StringRef current;
+//     std::tie(current, layout) = split;
+
+//     // Split at ':'.
+//     StringRef kind, spec;
+//     std::tie(kind, spec) = current.split(':');
+//     if (seen.contains(kind))
+//       continue;
+//     seen.insert(kind);
+
+//     char symbol = kind.front();
+//     StringRef parameter = kind.substr(1);
+
+//     if (symbol == 'i' || symbol == 'f') {
+//       unsigned bitwidth;
+//       if (parameter.getAsInteger(/*Radix=*/10, bitwidth))
+//         return failure();
+//       DenseIntElementsAttr params = parseDataLayoutAlignment(context, spec);
+//       if (!params)
+//         return failure();
+//       auto entry = DataLayoutEntryAttr::get(
+//           symbol == 'i' ? static_cast<Type>(IntegerType::get(context,
+//           bitwidth))
+//                         : getFloatType(context, bitwidth),
+//           params);
+//       entries.emplace_back(entry);
+//     } else if (symbol == 'e' || symbol == 'E') {
+//       auto value = StringAttr::get(
+//           context, symbol == 'e' ? DLTIDialect::kDataLayoutEndiannessLittle
+//                                  : DLTIDialect::kDataLayoutEndiannessBig);
+//       auto entry = DataLayoutEntryAttr::get(
+//           StringAttr::get(context, DLTIDialect::kDataLayoutEndiannessKey),
+//           value);
+//       entries.emplace_back(entry);
+//     } else if (symbol == 'p') {
+//       // Set the address space to the default address space.
+//       unsigned addressSpace = 0;
+//       if (!parameter.empty())
+//         if (parameter.getAsInteger(/*Radix=*/10, addressSpace))
+//           return failure();
+//       // Parse the pointer and index sizes as well as the alignment.
+//       FailureOr<SmallVector<int32_t>> values = parseColonSeparatedSpec(spec);
+//       if (failed(values))
+//         return failure();
+//       int32_t size = (*values)[0];
+//       int32_t abi = (*values)[1];
+//       int32_t pref = values->size() > 2 ? (*values)[2] : abi;
+//       int32_t idx = values->size() > 3 ? (*values)[3] : size;
+//       auto entry = DataLayoutEntryAttr::get(
+//           LLVMPointerType::get(context, addressSpace),
+//           DenseIntElementsAttr::get(
+//               VectorType::get({4}, IntegerType::get(context, 32)),
+//               {size, abi, pref, idx}));
+//       entries.emplace_back(entry);
+//     } else if (symbol == 'A') {
+//       unsigned addressSpace;
+//       if (parameter.getAsInteger(/*Radix=*/10, addressSpace))
+//         return failure();
+//       // Skip storing if generic address space is defined.
+//       if (addressSpace != 0) {
+//         auto entry = DataLayoutEntryAttr::get(
+//             StringAttr::get(context,
+//                             DLTIDialect::kDataLayoutAllocaMemorySpaceKey),
+//             mlir::Builder(context).getUI32IntegerAttr(addressSpace));
+//         entries.emplace_back(entry);
+//       }
+//     }
+
+//     // Warning if we ignore an data layout entry?
+//     // Use the module location to emit the warning!
+//     // Emit the
+//   }
+
+//   DataLayoutSpecInterface dlSpec = DataLayoutSpecAttr::get(context, entries);
+//   return dlSpec;
+// }
+
+FailureOr<DataLayoutSpecInterface> mlir::translateDataLayout(
+    const llvm::DataLayout &dataLayout, MLIRContext *context,
+    function_ref<InFlightDiagnostic(StringRef)> emitErrorFn,
+    function_ref<void(StringRef)> emitWarningFn) {
+  StringRef layout(dataLayout.getStringRepresentation());
+  StringRef defaultLayout("e-p:64:64:64-S0-i1:8:8-i8:8:8-i16:16:16-i32:32:32-"
+                          "i64:32:64-f16:16:16-f64:64:64-f128:128:128");
+
+  // Split the data layout strings into specifications separated by a dash and
+  // extract the specification kind.
+  SmallVector<StringRef> tokens;
+  layout.split(tokens, '-');
+  defaultLayout.split(tokens, '-');
+  SmallVector<StringRef> kinds, parameters;
+  StringSet<> seen;
+  for (StringRef token : tokens) {
+    auto [head, tail] = token.split(':');
+    if (!seen.try_emplace(head).second)
+      continue;
+    kinds.push_back(head);
+    parameters.push_back(tail);
+  }
 
   SmallVector<DataLayoutEntryInterface> entries;
-  StringSet<> seen;
-  while (!layout.empty()) {
-    // Split at '-'.
-    std::pair<StringRef, StringRef> split = layout.split('-');
-    StringRef current;
-    std::tie(current, layout) = split;
 
-    // Split at ':'.
-    StringRef kind, spec;
-    std::tie(kind, spec) = current.split(':');
-    if (seen.contains(kind))
+  auto storeStringEntry = [&](StringRef key, Attribute value) {
+    entries.push_back(
+        DataLayoutEntryAttr::get(StringAttr::get(context, key), value));
+  };
+  auto storeTypeEntry = [&](Type key, ArrayRef<unsigned> values) {
+    auto value = DenseIntElementsAttr::get(
+        VectorType::get(values.size(), IntegerType::get(context, 32)), values);
+    entries.push_back(DataLayoutEntryAttr::get(key, value));
+  };
+
+  // // Helper to parse a number.
+  // auto parseIntParam = [](StringRef parameter) -> FailureOr<unsigned> {
+  //   unsigned result = 0;
+  //   if (parameter.getAsInteger(/*Radix=*/10, result))
+  //     return failure();
+  //   return result;
+  // };
+  // Helper to parse a list of numbers and appending default values if needed.
+  auto parseIntParams =
+      [](StringRef parameters) -> FailureOr<SmallVector<unsigned>> {
+    SmallVector<StringRef> tokens;
+    parameters.split(tokens, ':');
+
+    // Parse an integer list.
+    SmallVector<unsigned> results(tokens.size());
+    for (auto [result, token] : llvm::zip(results, tokens))
+      if (token.getAsInteger(/*Radix=*/10, result))
+        return failure();
+    return results;
+  };
+  // Helper to parse a type alignment specification.
+  auto parseTypeAlignment =
+      [&](StringRef kind, StringRef parameter,
+          function_ref<Type(unsigned)> createTypeFn) -> LogicalResult {
+    FailureOr<SmallVector<unsigned>> width = parseIntParams(kind.drop_front());
+    if (failed(width) || width->size() != 1)
+      return emitErrorFn(kind);
+    FailureOr<SmallVector<unsigned>> alignments = parseIntParams(parameter);
+    if (failed(alignments) || alignments->empty())
+      return emitErrorFn(kind);
+    unsigned abi = (*alignments)[0];
+    unsigned pref = alignments->size() == 2 ? (*alignments)[1] : abi;
+
+    storeTypeEntry(createTypeFn(width->front()), {abi, pref});
+    return success();
+  };
+
+  for (auto [kind, parameter] : llvm::zip(kinds, parameters)) {
+    // Set the endianness.
+    if (kind.front() == 'e') {
+      storeStringEntry(
+          DLTIDialect::kDataLayoutEndiannessKey,
+          StringAttr::get(context, DLTIDialect::kDataLayoutEndiannessLittle));
       continue;
-    seen.insert(kind);
+    }
+    if (kind.front() == 'E') {
+      storeStringEntry(
+          DLTIDialect::kDataLayoutEndiannessKey,
+          StringAttr::get(context, DLTIDialect::kDataLayoutEndiannessBig));
+      continue;
+    }
 
-    char symbol = kind.front();
-    StringRef parameter = kind.substr(1);
-
-    if (symbol == 'i' || symbol == 'f') {
-      unsigned bitwidth;
-      if (parameter.getAsInteger(/*Radix=*/10, bitwidth))
-        return nullptr;
-      DenseIntElementsAttr params = parseDataLayoutAlignment(*context, spec);
-      if (!params)
-        return nullptr;
-      auto entry = DataLayoutEntryAttr::get(
-          symbol == 'i' ? static_cast<Type>(IntegerType::get(context, bitwidth))
-                        : getDLFloatType(*context, bitwidth),
-          params);
-      entries.emplace_back(entry);
-    } else if (symbol == 'e' || symbol == 'E') {
-      auto value = StringAttr::get(
-          context, symbol == 'e' ? DLTIDialect::kDataLayoutEndiannessLittle
-                                 : DLTIDialect::kDataLayoutEndiannessBig);
-      auto entry = DataLayoutEntryAttr::get(
-          StringAttr::get(context, DLTIDialect::kDataLayoutEndiannessKey),
-          value);
-      entries.emplace_back(entry);
-    } else if (symbol == 'A') {
-      unsigned addressSpace;
-      if (parameter.getAsInteger(/*Radix=*/10, addressSpace))
-        return nullptr;
-      // Skip storing if generic address space is defined.
-      if (addressSpace != 0) {
-        auto entry = DataLayoutEntryAttr::get(
-            StringAttr::get(context,
-                            DLTIDialect::kDataLayoutAllocaMemorySpaceKey),
-            mlir::Builder(context).getUI32IntegerAttr(addressSpace));
-        entries.emplace_back(entry);
-      }
+    // Set the alloca address space if it is non-null.
+    if (kind.front() == 'A') {
+      FailureOr<SmallVector<unsigned>> space =
+          parseIntParams(kind.drop_front());
+      if (failed(space) || space->size() != 1)
+        return emitErrorFn(kind);
+      if (space->front() == 0)
+        continue;
+      auto value = Builder(context).getUI32IntegerAttr(space->front());
+      storeStringEntry(DLTIDialect::kDataLayoutAllocaMemorySpaceKey, value);
+      continue;
+    }
+    // Set an integer specification.
+    if (kind.front() == 'i') {
+      if (failed(parseTypeAlignment(kind, parameter, [&](unsigned width) {
+            return IntegerType::get(context, width);
+          })))
+        return failure();
+      continue;
+    }
+    // Set an float specification.
+    if (kind.front() == 'f') {
+      if (failed(parseTypeAlignment(kind, parameter, [&](unsigned width) {
+            return getFloatType(context, width);
+          })))
+        return failure();
+      continue;
     }
   }
 
-  return DataLayoutSpecAttr::get(context, entries);
+  DataLayoutSpecInterface dlSpec = DataLayoutSpecAttr::get(context, entries);
+  dlSpec.combineWith(
+      ::llvm::ArrayRef<::mlir::DataLayoutSpecInterface> specs) return failure();
 }
 
 /// Get a topologically sorted list of blocks for the given function.
@@ -802,7 +1037,7 @@ Attribute ModuleImport::getConstantAsAttr(llvm::Constant *value) {
     if (type->isBFloatTy())
       floatTy = FloatType::getBF16(context);
     else
-      floatTy = getDLFloatType(*context, type->getScalarSizeInBits());
+      floatTy = getFloatType(context, type->getScalarSizeInBits());
     assert(floatTy && "unsupported floating point type");
     return builder.getFloatAttr(floatTy, c->getValueAPF());
   }
@@ -1737,13 +1972,15 @@ mlir::translateLLVMIRToModule(std::unique_ptr<llvm::Module> llvmModule,
       StringAttr::get(context, llvmModule->getSourceFileName()), /*line=*/0,
       /*column=*/0)));
 
-  DataLayoutSpecInterface dlSpec =
-      translateDataLayout(llvmModule->getDataLayout(), context);
-  if (!dlSpec) {
-    emitError(UnknownLoc::get(context), "can't translate data layout");
+  FailureOr<DataLayoutSpecInterface> dlSpec = translateDataLayout(
+      llvmModule->getDataLayout(), context, module->getLoc());
+  if (failed(dlSpec))
     return {};
-  }
-  module.get()->setAttr(DLTIDialect::kDataLayoutAttrName, dlSpec);
+
+  //   emitError(UnknownLoc::get(context), "can't translate data layout");
+  //   return {};
+  // }
+  module.get()->setAttr(DLTIDialect::kDataLayoutAttrName, *dlSpec);
 
   ModuleImport moduleImport(module.get(), std::move(llvmModule));
   if (failed(moduleImport.initializeImportInterface()))

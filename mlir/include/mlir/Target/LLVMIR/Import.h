@@ -13,8 +13,10 @@
 #ifndef MLIR_TARGET_LLVMIR_IMPORT_H
 #define MLIR_TARGET_LLVMIR_IMPORT_H
 
+#include "mlir/IR/Location.h"
 #include "mlir/IR/OwningOpRef.h"
 #include "mlir/Support/LLVM.h"
+#include "mlir/Support/LogicalResult.h"
 #include "llvm/ADT/StringRef.h"
 #include <memory>
 
@@ -39,10 +41,13 @@ OwningOpRef<ModuleOp>
 translateLLVMIRToModule(std::unique_ptr<llvm::Module> llvmModule,
                         MLIRContext *context);
 
-/// Translate the given LLVM data layout into an MLIR equivalent using the DLTI
-/// dialect.
-DataLayoutSpecInterface translateDataLayout(const llvm::DataLayout &dataLayout,
-                                            MLIRContext *context);
+/// Translates the given LLVM IR data layout to a dialect data layout spec
+/// attribute. Only integer, float, pointer, alloca memory space, and endianess
+/// attributes are currently supported.
+FailureOr<DataLayoutSpecInterface>
+translateDataLayout(const llvm::DataLayout &dataLayout, MLIRContext *context,
+                    function_ref<InFlightDiagnostic(StringRef)> emitErrorFn,
+                    function_ref<void(StringRef)> emitWarningFn);
 
 } // namespace mlir
 
