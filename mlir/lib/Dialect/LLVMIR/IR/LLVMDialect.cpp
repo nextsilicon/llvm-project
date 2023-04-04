@@ -279,25 +279,27 @@ static LogicalResult verifyLoopAnnotationAttr(LoopAnnotationAttr loopAttr,
                                               Operation *op) {
   if (!loopAttr)
     return success();
-  // If the `llvm.loop` attribute is present, enforce the following structure,
-  // which the module translation can assume.
-  ArrayRef<SymbolRefAttr> parallelAccesses = loopAttr.getParallelAccesses();
-  if (parallelAccesses.empty())
-    return success();
-  for (SymbolRefAttr accessGroupRef : parallelAccesses) {
-    StringAttr metadataName = accessGroupRef.getRootReference();
-    auto metadataOp = SymbolTable::lookupNearestSymbolFrom<LLVM::MetadataOp>(
-        op->getParentOp(), metadataName);
-    if (!metadataOp)
-      return op->emitOpError() << "expected '" << accessGroupRef
-                               << "' to reference a metadata op";
-    StringAttr accessGroupName = accessGroupRef.getLeafReference();
-    Operation *accessGroupOp =
-        SymbolTable::lookupNearestSymbolFrom(metadataOp, accessGroupName);
-    if (!accessGroupOp)
-      return op->emitOpError() << "expected '" << accessGroupRef
-                               << "' to reference an access_group op";
-  }
+  // TODO remove?
+  // // If the `llvm.loop` attribute is present, enforce the following
+  // structure,
+  // // which the module translation can assume.
+  // ArrayRef<SymbolRefAttr> parallelAccesses = loopAttr.getParallelAccesses();
+  // if (parallelAccesses.empty())
+  //   return success();
+  // for (SymbolRefAttr accessGroupRef : parallelAccesses) {
+  //   StringAttr metadataName = accessGroupRef.getRootReference();
+  //   auto metadataOp = SymbolTable::lookupNearestSymbolFrom<LLVM::MetadataOp>(
+  //       op->getParentOp(), metadataName);
+  //   if (!metadataOp)
+  //     return op->emitOpError() << "expected '" << accessGroupRef
+  //                              << "' to reference a metadata op";
+  //   StringAttr accessGroupName = accessGroupRef.getLeafReference();
+  //   Operation *accessGroupOp =
+  //       SymbolTable::lookupNearestSymbolFrom(metadataOp, accessGroupName);
+  //   if (!accessGroupOp)
+  //     return op->emitOpError() << "expected '" << accessGroupRef
+  //                              << "' to reference an access_group op";
+  // }
   return success();
 }
 
@@ -2789,14 +2791,14 @@ struct LLVMOpAsmDialectInterface : public OpAsmDialectInterface {
 
   AliasResult getAlias(Attribute attr, raw_ostream &os) const override {
     return TypeSwitch<Attribute, AliasResult>(attr)
-        .Case<DIBasicTypeAttr, DICompileUnitAttr, DICompositeTypeAttr,
-              DIDerivedTypeAttr, DIFileAttr, DILexicalBlockAttr,
-              DILexicalBlockFileAttr, DILocalVariableAttr, DINamespaceAttr,
-              DINullTypeAttr, DISubprogramAttr, DISubroutineTypeAttr,
-              LoopAnnotationAttr, LoopVectorizeAttr, LoopInterleaveAttr,
-              LoopUnrollAttr, LoopUnrollAndJamAttr, LoopLICMAttr,
-              LoopDistributeAttr, LoopPipelineAttr, LoopPeeledAttr,
-              LoopUnswitchAttr>([&](auto attr) {
+        .Case<AccessGroupAttr, DIBasicTypeAttr, DICompileUnitAttr,
+              DICompositeTypeAttr, DIDerivedTypeAttr, DIFileAttr,
+              DILexicalBlockAttr, DILexicalBlockFileAttr, DILocalVariableAttr,
+              DINamespaceAttr, DINullTypeAttr, DISubprogramAttr,
+              DISubroutineTypeAttr, LoopAnnotationAttr, LoopVectorizeAttr,
+              LoopInterleaveAttr, LoopUnrollAttr, LoopUnrollAndJamAttr,
+              LoopLICMAttr, LoopDistributeAttr, LoopPipelineAttr,
+              LoopPeeledAttr, LoopUnswitchAttr>([&](auto attr) {
           os << decltype(attr)::getMnemonic();
           return AliasResult::OverridableAlias;
         })

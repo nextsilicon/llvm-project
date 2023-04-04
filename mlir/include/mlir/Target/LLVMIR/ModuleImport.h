@@ -180,10 +180,10 @@ public:
     return tbaaMapping.lookup(node);
   }
 
-  /// Returns the symbol references pointing to the access group operations that
-  /// map to the access group nodes starting from the access group metadata
-  /// `node`. Returns failure, if any of the symbol references cannot be found.
-  FailureOr<SmallVector<SymbolRefAttr>>
+  /// Returns the access groups attribute that maps to the access group nodes
+  /// starting from the access group metadata `node`. Returns failure if the
+  /// lookup fails for any of the access groups.
+  FailureOr<SmallVector<AccessGroupAttr>>
   lookupAccessGroupAttrs(const llvm::MDNode *node) const;
 
   /// Returns the loop annotation attribute that corresponds to the given LLVM

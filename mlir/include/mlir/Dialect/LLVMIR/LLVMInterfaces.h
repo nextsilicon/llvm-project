@@ -19,9 +19,10 @@ namespace mlir {
 namespace LLVM {
 namespace detail {
 
-/// Verifies the access groups attribute of memory operations that implement the
-/// access group interface.
-LogicalResult verifyAccessGroupOpInterface(Operation *op);
+// /// Verifies the access groups attribute of memory operations that implement
+// the
+// /// access group interface.
+// LogicalResult verifyAccessGroupOpInterface(Operation *op);
 
 /// Verifies the alias analysis attributes of memory operations that implement
 /// the alias analysis interface.

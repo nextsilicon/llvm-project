@@ -85,13 +85,14 @@ LogicalResult verifySymbolRefsPointTo(Operation *op, StringRef name,
 // AccessGroupOpInterface
 //===----------------------------------------------------------------------===//
 
-LogicalResult mlir::LLVM::detail::verifyAccessGroupOpInterface(Operation *op) {
-  auto iface = cast<AccessGroupOpInterface>(op);
-  if (failed(verifySymbolRefsPointTo<LLVM::AccessGroupMetadataOp>(
-          iface, "access groups", iface.getAccessGroupsOrNull())))
-    return failure();
-  return success();
-}
+// LogicalResult mlir::LLVM::detail::verifyAccessGroupOpInterface(Operation *op)
+// {
+//   auto iface = cast<AccessGroupOpInterface>(op);
+//   if (failed(verifySymbolRefsPointTo<LLVM::AccessGroupMetadataOp>(
+//           iface, "access groups", iface.getAccessGroupsOrNull())))
+//     return failure();
+//   return success();
+// }
 
 //===----------------------------------------------------------------------===//
 // AliasAnalysisOpInterface

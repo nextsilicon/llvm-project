@@ -246,6 +246,27 @@ class ListIntSubst<string pattern, list<int> values> {
 }
 
 //===----------------------------------------------------------------------===//
+// Access group attribute.
+//===----------------------------------------------------------------------===//
+
+def LLVM_AccessGroupAttr : LLVM_Attr<"AccessGroup", "access_group"> {
+  let parameters = (ins
+    "int64_t":$id
+  );
+  let builders = [
+    TypeBuilder<(ins), [{
+      return getDistinct<AccessGroupAttr>($_ctxt);
+    }]>
+  ];
+  let assemblyFormat = "`<` struct(params) `>`";
+}
+
+def AccessGroupArrayAttr :
+  TypedArrayAttrBase<LLVM_AccessGroupAttr, "access group array attribute"> {
+  let constBuilderCall = ?;
+}
+
+//===----------------------------------------------------------------------===//
 // Base classes for LLVM dialect operations.
 //===----------------------------------------------------------------------===//
 
@@ -263,7 +284,7 @@ class LLVM_MemAccessOpBase<string mnemonic, list<Trait> traits = []> :
       DeclareOpInterfaceMethods<AccessGroupOpInterface>,
       DeclareOpInterfaceMethods<AliasAnalysisOpInterface>], traits)>,
     LLVM_MemOpPatterns {
-  dag aliasAttrs = (ins OptionalAttr<SymbolRefArrayAttr>:$access_groups,
+  dag aliasAttrs = (ins OptionalAttr<AccessGroupArrayAttr>:$access_groups,
                     OptionalAttr<SymbolRefArrayAttr>:$alias_scopes,
                     OptionalAttr<SymbolRefArrayAttr>:$noalias_scopes,
                     OptionalAttr<SymbolRefArrayAttr>:$tbaa);
@@ -306,7 +327,7 @@ class LLVM_IntrOpBase<Dialect dialect, string opName, string enumName,
       Results<!if(!gt(numResults, 0), (outs LLVM_Type:$res), (outs))> {
   dag aliasAttrs = !con(
         !if(!gt(requiresAccessGroup, 0),
-            (ins OptionalAttr<SymbolRefArrayAttr>:$access_groups),
+            (ins OptionalAttr<AccessGroupArrayAttr>:$access_groups),
             (ins )),
         !if(!gt(requiresAccessGroup, 0),
             (ins OptionalAttr<SymbolRefArrayAttr>:$alias_scopes,

@@ -16,9 +16,9 @@
 
 #include "mlir/Dialect/LLVMIR/LLVMTypes.h"
 #include "mlir/IR/OpImplementation.h"
-#include <optional>
 
 #include "mlir/Dialect/LLVMIR/LLVMOpsEnums.h.inc"
+#include "mlir/Support/LogicalResult.h"
 
 namespace mlir {
 namespace LLVM {
@@ -59,6 +59,32 @@ public:
   /// Support LLVM type casting.
   static bool classof(Attribute attr);
 };
+
+namespace detail {
+class AttrIDGenAttrStorage;
+} // namespace detail
+
+class AttrIDGenAttr : public Attribute::AttrBase<AttrIDGenAttr, Attribute,
+                                                 detail::AttrIDGenAttrStorage,
+                                                 AttributeTrait::IsMutable> {
+public:
+  /// Inherit base constructors.
+  using Base::Base;
+
+  /// Returns a generator attribute that produces unique attribute identifiers.
+  static AttrIDGenAttr get(Attribute attribute);
+
+  /// Returns the next identifier.
+  int64_t getNextID();
+};
+
+/// Returns an attribute of the given type using the given parameters and
+/// replaces the initial builder argument with a unique identifier.
+template <typename AttrTy, typename... Args>
+AttrTy getDistinct(MLIRContext *context, Args &&...args) {
+  auto genAttr = AttrIDGenAttr::get(AttrTy::get(context, 0, args...));
+  return AttrTy::get(context, genAttr.getNextID(), std::forward<Args>(args)...);
+}
 
 // Inline the LLVM generated Linkage enum and utility.
 // This is only necessary to isolate the "enum generated code" from the

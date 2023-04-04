@@ -12,11 +12,14 @@
 
 #include "mlir/Dialect/LLVMIR/LLVMAttrs.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
+#include "mlir/IR/Attributes.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectImplementation.h"
+#include "mlir/Support/LogicalResult.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/BinaryFormat/Dwarf.h"
+#include <cstdint>
 #include <optional>
 
 using namespace mlir;
@@ -31,6 +34,7 @@ using namespace mlir::LLVM;
 //===----------------------------------------------------------------------===//
 
 void LLVMDialect::registerAttributes() {
+  addAttributes<AttrIDGenAttr>();
   addAttributes<
 #define GET_ATTRDEF_LIST
 #include "mlir/Dialect/LLVMIR/LLVMOpsAttrDefs.cpp.inc"
@@ -99,4 +103,51 @@ bool MemoryEffectsAttr::isReadWrite() {
   if (this->getOther() != ModRefInfo::ModRef)
     return false;
   return true;
+}
+
+namespace mlir {
+namespace LLVM {
+namespace detail {
+class AttrIDGenAttrStorage : public AttributeStorage {
+public:
+  using KeyTy = std::tuple<Attribute>;
+
+  AttrIDGenAttrStorage(Attribute attribute) : attribute(attribute) {}
+
+  KeyTy getAsKey() const { return KeyTy(attribute); }
+
+  static llvm::hash_code hashKey(const KeyTy &key) {
+    return llvm::hash_combine(std::get<0>(key));
+  }
+
+  static AttrIDGenAttrStorage *construct(AttributeStorageAllocator &allocator,
+                                         const KeyTy &key) {
+    Attribute attribute = std::get<0>(key);
+    return new (allocator.allocate<AttrIDGenAttrStorage>())
+        AttrIDGenAttrStorage(attribute);
+  }
+
+  LogicalResult mutate(AttributeStorageAllocator &allocator, int64_t *next) {
+    *next = counter++;
+    return success();
+  }
+
+  bool operator==(const KeyTy &other) const { return getAsKey() == other; }
+
+private:
+  Attribute attribute;
+  int64_t counter = 0;
+};
+} // namespace detail
+} // namespace LLVM
+} // namespace mlir
+
+AttrIDGenAttr AttrIDGenAttr::get(Attribute attribute) {
+  return Base::get(attribute.getContext(), attribute);
+}
+
+int64_t AttrIDGenAttr::getNextID() {
+  int64_t next;
+  (void)Base::mutate(&next);
+  return next;
 }

@@ -12,6 +12,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Target/LLVMIR/ModuleImport.h"
+#include "mlir/Dialect/LLVMIR/LLVMAttrs.h"
+#include "mlir/IR/Threading.h"
 #include "mlir/Target/LLVMIR/Import.h"
 
 #include "AttrKindDetail.h"
@@ -37,6 +39,10 @@
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Operator.h"
 #include "llvm/Support/ModRef.h"
+#include "llvm/Support/Parallel.h"
+#include <cstdint>
+#include <thread>
+#include <unistd.h>
 
 using namespace mlir;
 using namespace mlir::LLVM;
@@ -153,7 +159,7 @@ ModuleImport::ModuleImport(ModuleOp mlirModule,
       typeTranslator(*mlirModule->getContext()),
       debugImporter(std::make_unique<DebugImporter>(mlirModule)),
       loopAnnotationImporter(
-          std::make_unique<LoopAnnotationImporter>(builder)) {
+          std::make_unique<LoopAnnotationImporter>(mlirModule.getContext())) {
   builder.setInsertionPointToStart(mlirModule.getBody());
 }
 
@@ -411,8 +417,7 @@ LogicalResult ModuleImport::processTBAAMetadata(const llvm::MDNode *node) {
 LogicalResult
 ModuleImport::processAccessGroupMetadata(const llvm::MDNode *node) {
   Location loc = mlirModule.getLoc();
-  if (failed(loopAnnotationImporter->translateAccessGroup(
-          node, loc, getGlobalMetadataOp())))
+  if (failed(loopAnnotationImporter->translateAccessGroup(node, loc)))
     return emitError(loc) << "unsupported access group node: "
                           << diagMD(node, llvmModule.get());
   return success();
@@ -1605,9 +1610,9 @@ LogicalResult ModuleImport::processBasicBlock(llvm::BasicBlock *bb,
   return success();
 }
 
-FailureOr<SmallVector<SymbolRefAttr>>
+FailureOr<SmallVector<AccessGroupAttr>>
 ModuleImport::lookupAccessGroupAttrs(const llvm::MDNode *node) const {
-  return loopAnnotationImporter->lookupAccessGroupAttrs(node);
+  return loopAnnotationImporter->lookupAccessGroupsAttr(node);
 }
 
 LoopAnnotationAttr
@@ -1645,6 +1650,36 @@ mlir::translateLLVMIRToModule(std::unique_ptr<llvm::Module> llvmModule,
     return {};
   if (failed(moduleImport.convertFunctions()))
     return {};
+
+  // OpBuilder builder(context);
+  // // for(int i = 0; i<10; i++) {
+  // //   if (i % 2 == 0) {
+  // //     blub = DistinctAttr::get(builder.getI32IntegerAttr(0));
+  // //   } else {
+  // //     blub = DistinctAttr::get(builder.getI32IntegerAttr(1));
+  // //   }
+  // //   (void)blub.inc();
+  // //   llvm::outs() << " - incrementing the id to " << blub.getId() << "\n";
+  // // }
+
+  // SmallVector<SmallVector<AccessGroupAttr>> attrs(32);
+
+  // llvm::parallelFor(0, 100, [&](size_t i) {
+  //   unsigned idx = llvm::parallel::getThreadIndex();
+  //   attrs[idx].push_back(AccessGroupAttr::get(context));
+  // });
+
+  // for (int i=0; i<32; ++i) {
+  //   llvm::outs() << "increments by thread " << i << "\n";
+  //   for (auto attr : attrs[i])
+  //     llvm::outs() << "- id " << attr.getId() << "\n";
+  // }
+  // // DenseSet<int64_t> incsSet;
+  // // for (int i=0; i<32; ++i) {
+  // //   incsSet.insert(incs[i].begin(), incs[i].end());
+  // // }
+  // // llvm::outs() << "number of unique identifiers " << incsSet.size() <<
+  // "\n";
 
   return module;
 }
