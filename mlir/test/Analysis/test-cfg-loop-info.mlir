@@ -1,4 +1,4 @@
-// RUN: mlir-opt -pass-pipeline="builtin.module(any(test-loop-info))" --split-input-file %s 2>&1 | FileCheck %s
+// RUN: mlir-opt -pass-pipeline="builtin.module(any(test-cfg-loop-info))" --split-input-file %s 2>&1 | FileCheck %s
 
 // CHECK-LABEL: Testing : "no_loop_single_block"
 // CHECK: no loops

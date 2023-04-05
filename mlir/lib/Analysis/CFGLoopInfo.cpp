@@ -1,4 +1,4 @@
-//===- LoopInfo.cpp - LoopInfo analysis for regions -----------------------===//
+//===- CFGLoopInfo.cpp - LoopInfo analysis for region bodies --------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,14 +6,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Analysis/LoopInfo.h"
+#include "mlir/Analysis/CFGLoopInfo.h"
 
 using namespace mlir;
 
-::mlir::Loop::Loop(mlir::Block *block)
-    : llvm::LoopBase<mlir::Block, Loop>(block) {}
+CFGLoop::CFGLoop(mlir::Block *block)
+    : llvm::LoopBase<mlir::Block, CFGLoop>(block) {}
 
-::mlir::LoopInfo::LoopInfo(
+CFGLoopInfo::CFGLoopInfo(
     const llvm::DominatorTreeBase<mlir::Block, false> &domTree) {
   analyze(domTree);
 }
