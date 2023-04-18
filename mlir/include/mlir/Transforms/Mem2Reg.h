@@ -11,7 +11,7 @@
 
 #include "mlir/IR/Dominance.h"
 #include "mlir/IR/OpDefinition.h"
-#include "mlir/Interfaces/Mem2RegInterfaces.h"
+#include "mlir/Interfaces/MemorySlotInterfaces.h"
 
 namespace mlir {
 

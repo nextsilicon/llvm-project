@@ -1,4 +1,4 @@
-//===-- Mem2RegInterfaces.td - Mem2Reg interfaces ----------*- tablegen -*-===//
+//===-- MemorySlotInterfaces.td - MemorySlot interfaces ----*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef MLIR_INTERFACES_MEM2REGINTERFACES
-#define MLIR_INTERFACES_MEM2REGINTERFACES
+#ifndef MLIR_INTERFACES_MEMORYSLOTINTERFACES
+#define MLIR_INTERFACES_MEMORYSLOTINTERFACES
 
 include "mlir/IR/OpBase.td"
 
@@ -193,4 +193,75 @@ def PromotableOpInterface : OpInterface<"PromotableOpInterface"> {
   ];
 }
 
-#endif // MLIR_INTERFACES_MEM2REGINTERFACES
+def DestructibleAllocationOpInterface
+  : OpInterface<"DestructibleAllocationOpInterface"> {
+  let description = [{
+    TODO
+  }];
+  let cppNamespace = "::mlir";
+
+  let methods = [
+    InterfaceMethod<[{
+        Returns the list of slots for which destruction should be attempted,
+        specifying in which way the slot should be destructed into subslots. The
+        subslots are indexed by attributes. The type of the pointers of each
+        subslots to be generated must be provided.
+      }],
+      "::llvm::SmallVector<::mlir::DestructibleMemorySlot>",
+      "getDestructibleSlots",
+      (ins)
+    >,
+    InterfaceMethod<[{
+        Destructures this slot into multiple subslots. The newly generated slots
+        may belong to a different allocator. The original slot must still exist
+        at the end of this call.
+
+        The builder is located at the beginning of the block where the slot
+        pointer is defined.
+      }],
+      "::llvm::SmallVector<::mlir::MemorySlot>",
+      "destruct",
+      (ins "const ::mlir::DestructibleMemorySlot &":$slot,
+           "::mlir::OpBuilder &":$builder)
+    >,
+    InterfaceMethod<[{
+        Hook triggered once the destruction of a slot is complete, meaning the
+        original slot is no longer being refered to and could be deleted.
+        This will only be called for slots declared by this operation.
+      }],
+      "void", "handleDestructionComplete",
+      (ins "const ::mlir::DestructibleMemorySlot &":$slot)
+    >,
+  ];
+}
+
+def DestructibleAccessorOpInterface
+  : OpInterface<"DestructibleAccessorOpInterface"> {
+  let description = [{
+    TODO
+  }];
+  let cppNamespace = "::mlir";
+
+  let methods = [
+    InterfaceMethod<[{
+        For a given destructible memory slot, returns whether this operation can
+        rewire its uses of the slot to use the slots generated after
+        destruction. This may involve creating new operations, and usually
+        amounts to checking the pointer types match.
+      }],
+      "::llvm::SmallVector<::mlir::MemorySlot>",
+      "canRewire",
+      (ins "const ::mlir::DestructibleMemorySlot &":$slot)
+    >,
+    InterfaceMethod<[{
+        Rewires the use of a slot to the generated subslots.
+      }],
+      "void",
+      "rewire",
+      (ins "const ::mlir::DestructibleMemorySlot &":$slot,
+           "::llvm::DenseMap<::mlir::Attribute, ::mlir::Value> &":$subslots)
+    >
+  ];
+}
+
+#endif // MLIR_INTERFACES_MEMORYSLOTINTERFACES

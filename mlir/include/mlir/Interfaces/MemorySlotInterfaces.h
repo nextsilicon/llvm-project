@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef MLIR_INTERFACES_MEM2REGINTERFACES_H
-#define MLIR_INTERFACES_MEM2REGINTERFACES_H
+#ifndef MLIR_INTERFACES_MEMORYSLOTINTERFACES_H
+#define MLIR_INTERFACES_MEMORYSLOTINTERFACES_H
 
 #include "mlir/IR/Dominance.h"
 #include "mlir/IR/OpDefinition.h"
@@ -23,6 +23,12 @@ struct MemorySlot {
   Type elemType;
 };
 
+struct DestructibleMemorySlot : public MemorySlot {
+  /// Maps from an index within the memory slot the type of the pointer that
+  /// will be generated to access the element directly.
+  DenseMap<Attribute, Type> elementsPtrs;
+};
+
 /// Returned by operation promotion logic requesting the deletion of an
 /// operation.
 enum class DeletionKind {
@@ -34,6 +40,6 @@ enum class DeletionKind {
 
 } // namespace mlir
 
-#include "mlir/Interfaces/Mem2RegInterfaces.h.inc"
+#include "mlir/Interfaces/MemorySlotInterfaces.h.inc"
 
-#endif // MLIR_INTERFACES_MEM2REGINTERFACES_H
+#endif // MLIR_INTERFACES_MEMORYSLOTINTERFACES_H
