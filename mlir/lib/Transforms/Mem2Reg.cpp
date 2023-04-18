@@ -89,9 +89,9 @@ using namespace mlir;
 
 namespace {
 
-/// Metadata computed during promotion analysis used to compute actual
+/// Information computed during promotion analysis used to perform actual
 /// promotion.
-struct SlotPromotionMetadata {
+struct SlotPromotionInfo {
   /// Blocks for which at least two definitions of the slot values clash.
   SmallPtrSet<Block *, 8> mergePoints;
   /// Contains, for each operation, which uses must be eliminated by promotion.
@@ -101,17 +101,17 @@ struct SlotPromotionMetadata {
   DenseMap<Operation *, SmallPtrSet<OpOperand *, 4>> userToBlockingUses;
 };
 
-/// Computes metadata for basic slot promotion. This will check that direct slot
-/// promotion can be performed, and provide the metadata to execute the
+/// Computes information for basic slot promotion. This will check that direct
+/// slot promotion can be performed, and provide the information to execute the
 /// promotion. This does not mutate IR.
 class SlotPromotionAnalyzer {
 public:
   SlotPromotionAnalyzer(MemorySlot slot, DominanceInfo &dominance)
       : slot(slot), dominance(dominance) {}
 
-  /// Computes the metadata for slot promotion if promotion is possible, returns
-  /// nothing otherwise.
-  Optional<SlotPromotionMetadata> computeMetadata();
+  /// Computes the information for slot promotion if promotion is possible,
+  /// returns nothing otherwise.
+  Optional<SlotPromotionInfo> computeInfo();
 
 private:
   /// Computes the transitive uses of the slot that block promotion. This finds
@@ -151,11 +151,10 @@ class SlotPromoter {
 public:
   SlotPromoter(MemorySlot slot, PromotableAllocationOpInterface allocator,
                OpBuilder &builder, DominanceInfo &dominance,
-               SlotPromotionMetadata metadata);
+               SlotPromotionInfo info);
 
-  /// Actually promotes the slot by mutating IR. This method must only be
-  /// called after a successful call to `SlotPromoter::prepareSlotPromotion`.
-  /// Promoting a slot does not invalidate the preparation of other slots.
+  /// Actually promotes the slot by mutating IR. Promoting a slot does not
+  /// invalidate the SlotPromotionInfo of other slots.
   void promoteSlot();
 
 private:
@@ -187,7 +186,7 @@ private:
   /// are only computed for promotable memory operations with blocking uses.
   DenseMap<PromotableMemOpInterface, Value> reachingDefs;
   DominanceInfo &dominance;
-  SlotPromotionMetadata metadata;
+  SlotPromotionInfo info;
 };
 
 } // namespace
@@ -195,9 +194,9 @@ private:
 SlotPromoter::SlotPromoter(MemorySlot slot,
                            PromotableAllocationOpInterface allocator,
                            OpBuilder &builder, DominanceInfo &dominance,
-                           SlotPromotionMetadata metadata)
+                           SlotPromotionInfo info)
     : slot(slot), allocator(allocator), builder(builder), dominance(dominance),
-      metadata(std::move(metadata)) {
+      info(std::move(info)) {
   bool isResultOrNewBlockArgument = slot.ptr.getDefiningOp() == allocator;
   if (BlockArgument arg = slot.ptr.dyn_cast<BlockArgument>())
     isResultOrNewBlockArgument = isResultOrNewBlockArgument ||
@@ -376,34 +375,34 @@ bool SlotPromotionAnalyzer::areMergePointsUsable(
   return true;
 }
 
-Optional<SlotPromotionMetadata> SlotPromotionAnalyzer::computeMetadata() {
-  SlotPromotionMetadata metadata;
+Optional<SlotPromotionInfo> SlotPromotionAnalyzer::computeInfo() {
+  SlotPromotionInfo info;
 
   // First, find the set of operations that will need to be changed for the
   // promotion to happen. These operations need to resolve some of their uses,
   // either by rewiring them or simply deleting themselves. If any of them
   // cannot find a way to resolve their blocking uses, we abort the promotion.
-  if (failed(computeBlockingUses(metadata.userToBlockingUses)))
+  if (failed(computeBlockingUses(info.userToBlockingUses)))
     return {};
 
   // Then, compute blocks in which two or more definitions of the allocated
   // variable may conflict. These blocks will need a new block argument to
   // accomodate this.
-  computeMergePoints(metadata.mergePoints);
+  computeMergePoints(info.mergePoints);
 
   // The slot can be promoted if the block arguments to be created can
   // actually be populated with values, which may not be possible depending
   // on their predecessors.
-  if (!areMergePointsUsable(metadata.mergePoints))
+  if (!areMergePointsUsable(info.mergePoints))
     return {};
 
-  return {std::move(metadata)};
+  return {std::move(info)};
 }
 
 Value SlotPromoter::computeReachingDefInBlock(Block *block, Value reachingDef) {
   for (Operation &op : block->getOperations()) {
     if (auto memOp = dyn_cast<PromotableMemOpInterface>(op)) {
-      if (userToBlockingUses.contains(memOp))
+      if (info.userToBlockingUses.contains(memOp))
         reachingDefs.insert({memOp, reachingDef});
 
       if (Value stored = memOp.getStored(slot))
@@ -437,7 +436,7 @@ void SlotPromoter::computeReachingDefInRegion(Region *region,
     DfsJob job = dfsStack.pop_back_val();
     Block *block = job.block->getBlock();
 
-    if (metadata.mergePoints.contains(block)) {
+    if (info.mergePoints.contains(block)) {
       BlockArgument blockArgument =
           block->addArgument(slot.elemType, slot.ptr.getLoc());
       builder.setInsertionPointToStart(block);
@@ -449,7 +448,7 @@ void SlotPromoter::computeReachingDefInRegion(Region *region,
 
     if (auto terminator = dyn_cast<BranchOpInterface>(block->getTerminator())) {
       for (BlockOperand &blockOperand : terminator->getBlockOperands()) {
-        if (metadata.mergePoints.contains(blockOperand.get())) {
+        if (info.mergePoints.contains(blockOperand.get())) {
           if (!job.reachingDef)
             job.reachingDef = getLazyDefaultValue();
           terminator.getSuccessorOperands(blockOperand.getOperandNumber())
@@ -465,7 +464,7 @@ void SlotPromoter::computeReachingDefInRegion(Region *region,
 
 void SlotPromoter::removeBlockingUses() {
   llvm::SetVector<Operation *> usersToRemoveUses;
-  for (auto &user : llvm::make_first_range(metadata.userToBlockingUses))
+  for (auto &user : llvm::make_first_range(info.userToBlockingUses))
     usersToRemoveUses.insert(user);
   SetVector<Operation *> sortedUsersToRemoveUses =
       mlir::topologicalSort(usersToRemoveUses);
@@ -480,8 +479,8 @@ void SlotPromoter::removeBlockingUses() {
         reachingDef = getLazyDefaultValue();
 
       builder.setInsertionPointAfter(toPromote);
-      if (toPromoteMemOp.removeBlockingUses(slot, userToBlockingUses[toPromote],
-                                            builder, reachingDef) ==
+      if (toPromoteMemOp.removeBlockingUses(
+              slot, info.userToBlockingUses[toPromote], builder, reachingDef) ==
           DeletionKind::Delete)
         toErase.push_back(toPromote);
 
@@ -490,7 +489,8 @@ void SlotPromoter::removeBlockingUses() {
 
     auto toPromoteBasic = cast<PromotableOpInterface>(toPromote);
     builder.setInsertionPointAfter(toPromote);
-    if (toPromoteBasic.removeBlockingUses(slot, userToBlockingUses[toPromote],
+    if (toPromoteBasic.removeBlockingUses(slot,
+                                          info.userToBlockingUses[toPromote],
                                           builder) == DeletionKind::Delete)
       toErase.push_back(toPromote);
   }
@@ -510,7 +510,7 @@ void SlotPromoter::promoteSlot() {
 
   // Update terminators in dead branches to forward default if they are
   // succeeded by a merge points.
-  for (Block *mergePoint : metadata.mergePoints) {
+  for (Block *mergePoint : info.mergePoints) {
     for (BlockOperand &use : mergePoint->getUses()) {
       auto user = cast<BranchOpInterface>(use.getOwner());
       SuccessorOperands succOperands =
@@ -537,10 +537,10 @@ LogicalResult mlir::tryToPromoteMemorySlots(
         continue;
 
       SlotPromotionAnalyzer analyzer(slot, dominance);
-      Optional<SlotPromotionMetadata> metadata = analyzer.computeMetadata();
-      if (metadata.has_value())
+      Optional<SlotPromotionInfo> info = analyzer.computeInfo();
+      if (info.has_value())
         toPromote.emplace_back(slot, allocator, builder, dominance,
-                               std::move(metadata.value()));
+                               std::move(info.value()));
     }
   }
 
