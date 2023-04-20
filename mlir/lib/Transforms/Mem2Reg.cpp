@@ -11,8 +11,10 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/Dominance.h"
 #include "mlir/Interfaces/ControlFlowInterfaces.h"
+#include "mlir/Interfaces/MemorySlotInterfaces.h"
 #include "mlir/Transforms/Passes.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/GenericIteratedDominanceFrontier.h"
 
 namespace mlir {
@@ -168,9 +170,9 @@ LogicalResult MemorySlotPromotionAnalyzer::computeBlockingUses(
   }
 
   // Because this pass currently only supports analysing the parent region of
-  // the slot pointer, if a promotable memory op that needs promotion is
-  // outside of this region, promotion must fail because it will be impossible
-  // to provide a valid `reachingDef` for it.
+  // the slot pointer, if a promotable memory op that needs promotion is outside
+  // of this region, promotion must fail because it will be impossible to
+  // provide a valid `reachingDef` for it.
   for (auto &[toPromote, _] : userToBlockingUses)
     if (isa<PromotableMemOpInterface>(toPromote) &&
         toPromote->getParentRegion() != slot.ptr.getParentRegion())
@@ -295,7 +297,8 @@ Optional<MemorySlotPromotionInfo> MemorySlotPromotionAnalyzer::computeInfo() {
   return {std::move(info)};
 }
 
-Value MemorySlotPromoter::computeReachingDefInBlock(Block *block, Value reachingDef) {
+Value MemorySlotPromoter::computeReachingDefInBlock(Block *block,
+                                                    Value reachingDef) {
   for (Operation &op : block->getOperations()) {
     if (auto memOp = dyn_cast<PromotableMemOpInterface>(op)) {
       if (info.userToBlockingUses.contains(memOp))
@@ -310,7 +313,7 @@ Value MemorySlotPromoter::computeReachingDefInBlock(Block *block, Value reaching
 }
 
 void MemorySlotPromoter::computeReachingDefInRegion(Region *region,
-                                              Value reachingDef) {
+                                                    Value reachingDef) {
   if (region->hasOneBlock()) {
     computeReachingDefInBlock(&region->front(), reachingDef);
     return;
