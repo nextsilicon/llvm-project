@@ -214,6 +214,13 @@ def SCCP : Pass<"sccp"> {
   let constructor = "mlir::createSCCPPass()";
 }
 
+def SROA : Pass<"sroa"> {
+  let summary = "TODO";
+  let description = [{
+    TODO
+  }];
+}
+
 def StripDebugInfo : Pass<"strip-debuginfo"> {
   let summary = "Strip debug info from all operations";
   let description = [{

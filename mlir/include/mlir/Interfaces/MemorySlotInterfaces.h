@@ -29,6 +29,11 @@ struct DestructibleMemorySlot : public MemorySlot {
   DenseMap<Attribute, Type> elementsPtrs;
 };
 
+struct SubElementMemorySlot : public MemorySlot {
+  /// Index of this memory slot in the parent memory slot.
+  Attribute subelementIndex;
+};
+
 /// Returned by operation promotion logic requesting the deletion of an
 /// operation.
 enum class DeletionKind {

@@ -248,8 +248,12 @@ def DestructibleAccessorOpInterface
         rewire its uses of the slot to use the slots generated after
         destruction. This may involve creating new operations, and usually
         amounts to checking the pointer types match.
+
+        Returns memory slots representing the accessed subelements, if any.
+        Returned slots can only be aliased by other SubElementMemorySlots of the
+        same type coming from the same parent slot.
       }],
-      "::llvm::SmallVector<::mlir::MemorySlot>",
+      "::llvm::SmallVector<::mlir::SubElementMemorySlot>",
       "canRewire",
       (ins "const ::mlir::DestructibleMemorySlot &":$slot)
     >,
