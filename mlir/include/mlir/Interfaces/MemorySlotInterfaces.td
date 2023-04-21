@@ -219,7 +219,7 @@ def DestructibleAllocationOpInterface
         The builder is located at the beginning of the block where the slot
         pointer is defined.
       }],
-      "::llvm::SmallVector<::mlir::MemorySlot>",
+      "::llvm::DenseMap<::mlir::Attribute, ::mlir::MemorySlot>",
       "destruct",
       (ins "const ::mlir::DestructibleMemorySlot &":$slot,
            "::mlir::OpBuilder &":$builder)
@@ -249,21 +249,24 @@ def DestructibleAccessorOpInterface
         destruction. This may involve creating new operations, and usually
         amounts to checking the pointer types match.
 
-        Returns memory slots representing the accessed subelements, if any.
-        Returned slots can only be aliased by other SubElementMemorySlots of the
-        same type coming from the same parent slot.
+        In case of success, adds to `subelements` the memory slots representing
+        the accessed subelements, if any. These slots can only be aliased by
+        other SubElementMemorySlots of the same type coming from the same parent
+        slot.
       }],
-      "::llvm::SmallVector<::mlir::SubElementMemorySlot>",
+      "bool",
       "canRewire",
-      (ins "const ::mlir::DestructibleMemorySlot &":$slot)
+      (ins "const ::mlir::DestructibleMemorySlot &":$slot,
+           "::llvm::SmallVectorImpl<::mlir::SubElementMemorySlot> &":$subelems)
     >,
     InterfaceMethod<[{
-        Rewires the use of a slot to the generated subslots.
+        Rewires the use of a slot to the generated subslots, without deleting
+        any operation. Returns whether the accessor should be deleted.
       }],
-      "void",
+      "::mlir::DeletionKind",
       "rewire",
       (ins "const ::mlir::DestructibleMemorySlot &":$slot,
-           "::llvm::DenseMap<::mlir::Attribute, ::mlir::Value> &":$subslots)
+           "::llvm::DenseMap<::mlir::Attribute, ::mlir::MemorySlot> &":$subslots)
     >
   ];
 }

@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Transforms/SROA.h"
+#include "mlir/Analysis/SliceAnalysis.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/Interfaces/MemorySlotInterfaces.h"
 #include "mlir/Transforms/Passes.h"
@@ -18,24 +19,101 @@ namespace mlir {
 
 using namespace mlir;
 
-LogicalResult MemorySlotDestructionAnalyzer::computeDestructionTree() {
-  // TODO: document structure
+template <typename K, typename V>
+static V &getOrInsertDefault(DenseMap<K, V> &map, K key) {
+  return map.try_emplace(key).first->second;
+}
 
-  SmallVector<MemorySlot> dfsWorklist{slot};
-  while (!dfsWorklist.empty()) {
-    MemorySlot currentSlot = dfsWorklist.pop_back_val();
-    bool mustBeLeaf = false;
+Optional<MemorySlotDestructionInfo>
+mlir::computeDestructionInfo(DestructibleMemorySlot &slot) {
+  MemorySlotDestructionInfo info;
 
-    for (Operation *user : currentSlot.ptr.getUsers()) {
-      if (auto memOp = llvm::dyn_cast<PromotableMemOpInterface>(user))
-        mustBeLeaf |=
-            memOp.getStored(currentSlot) || memOp.loadsFrom(currentSlot);
+  for (OpOperand &use : slot.ptr.getUses()) {
+    if (auto accessor =
+            dyn_cast<DestructibleAccessorOpInterface>(use.getOwner())) {
+      SmallVector<SubElementMemorySlot> subelements;
+      if (!accessor.canRewire(slot, subelements))
+        return {};
+      info.accessors.push_back(accessor);
+      continue;
+    }
 
-      
+    SmallPtrSet<OpOperand *, 4> &blockingUses =
+        getOrInsertDefault(info.userToBlockingUses, use.getOwner());
+    blockingUses.insert(&use);
+  }
+
+  SetVector<Operation *> forwardSlice;
+  mlir::getForwardSlice(slot.ptr, &forwardSlice);
+  for (Operation *user : forwardSlice) {
+    // If the next operation has no blocking uses, everything is fine.
+    if (!info.userToBlockingUses.contains(user))
+      continue;
+
+    SmallPtrSet<OpOperand *, 4> &blockingUses = info.userToBlockingUses[user];
+    auto promotable = dyn_cast<PromotableOpInterface>(user);
+
+    // An operation that has blocking uses must be promoted. If it is not
+    // promotable, destruction must fail.
+    if (!promotable)
+      return {};
+
+    SmallVector<OpOperand *> newBlockingUses;
+    // If the operation decides it cannot deal with removing the blocking uses,
+    // destruction must fail.
+    if (!promotable.canUsesBeRemoved(slot, blockingUses, newBlockingUses))
+      return {};
+
+    // Then, register any new blocking uses for coming operations.
+    for (OpOperand *blockingUse : newBlockingUses) {
+      assert(llvm::find(user->getResults(), blockingUse->get()) !=
+             user->result_end());
+
+      SmallPtrSetImpl<OpOperand *> &newUserBlockingUseSet =
+          getOrInsertDefault(info.userToBlockingUses, blockingUse->getOwner());
+      newUserBlockingUseSet.insert(blockingUse);
     }
   }
 
-  return success();
+  return info;
+}
+
+void mlir::destructSlot(DestructibleMemorySlot &slot,
+                        DestructibleAllocationOpInterface allocator,
+                        OpBuilder &builder, MemorySlotDestructionInfo &info) {
+  OpBuilder::InsertionGuard guard(builder);
+
+  builder.setInsertionPointToStart(slot.ptr.getParentBlock());
+  DenseMap<Attribute, MemorySlot> subslots = allocator.destruct(slot, builder);
+
+  llvm::SetVector<Operation *> usersToRewire;
+  for (auto &[user, _] : info.userToBlockingUses)
+    usersToRewire.insert(user);
+  for (DestructibleAccessorOpInterface accessor : info.accessors)
+    usersToRewire.insert(accessor);
+  SetVector<Operation *> sortedUsersToRewire =
+      mlir::topologicalSort(usersToRewire);
+
+  llvm::SmallVector<Operation *> toErase;
+  for (Operation *toRewire : llvm::reverse(sortedUsersToRewire)) {
+    builder.setInsertionPointAfter(toRewire);
+    if (auto promotable = dyn_cast<PromotableOpInterface>(toRewire)) {
+      if (promotable.removeBlockingUses(slot,
+                                        info.userToBlockingUses[promotable],
+                                        builder) == DeletionKind::Delete)
+        toErase.push_back(promotable);
+      continue;
+    }
+
+    auto accessor = cast<DestructibleAccessorOpInterface>(toRewire);
+    if (accessor.rewire(slot, subslots) == DeletionKind::Delete)
+      toErase.push_back(accessor);
+  }
+
+  for (Operation *toEraseOp : toErase)
+    toEraseOp->erase();
+
+  allocator.handleDestructionComplete(slot);
 }
 
 namespace {
@@ -51,22 +129,28 @@ struct SROA : public impl::SROABase<SROA> {
 
       OpBuilder builder(&region.front(), region.front().begin());
 
-      // Promoting a slot can allow for further promotion of other slots,
-      // promotion is tried until no promotion succeeds.
-      while (true) {
-        DominanceInfo &dominance = getAnalysis<DominanceInfo>();
+      // Destructing a slot can allow for further destruction of other slots,
+      // destruction is tried until no destruction succeeds.
+      bool justDestructed = true;
+      while (justDestructed) {
+        justDestructed = false;
 
         for (Block &block : region) {
           for (Operation &op : block.getOperations()) {
             if (auto allocator =
                     llvm::dyn_cast<DestructibleAllocationOpInterface>(op)) {
-              allocator.getDestructibleSlots();
+              for (DestructibleMemorySlot slot :
+                   allocator.getDestructibleSlots()) {
+                if (auto info = computeDestructionInfo(slot)) {
+                  destructSlot(slot, allocator, builder, info.value());
+                  justDestructed = true;
+                }
+              }
             }
           }
         }
 
-        changed = true;
-        getAnalysisManager().invalidate({});
+        changed |= justDestructed;
       }
     }
 

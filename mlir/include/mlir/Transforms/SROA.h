@@ -9,34 +9,25 @@
 #ifndef MLIR_TRANSFORMS_SROA_H
 #define MLIR_TRANSFORMS_SROA_H
 
-#include "mlir/IR/Dominance.h"
 #include "mlir/Interfaces/MemorySlotInterfaces.h"
 #include "mlir/Support/LogicalResult.h"
 
 namespace mlir {
 
+struct MemorySlotDestructionInfo {
+  DenseMap<Operation *, SmallPtrSet<OpOperand *, 4>> userToBlockingUses;
+  SmallVector<DestructibleAccessorOpInterface> accessors;
+};
+
 /// Computes information for slot destruction leading to promotion. This will
-/// compute whether destructing this slot and subsequent new subslots will
-/// lead to only promatble slots being generated.
-class MemorySlotDestructionAnalyzer {
-public:
-  MemorySlotDestructionAnalyzer(MemorySlot slot, DominanceInfo &dominance)
-      : slot(slot), dominance(dominance) {}
+/// compute whether this slot can be destructed. Returns nothing if the slot
+/// cannot be destructed.
+Optional<MemorySlotDestructionInfo>
+computeDestructionInfo(DestructibleMemorySlot &slot);
 
-private:
-  LogicalResult computeDestructionTree();
-
-  LogicalResult computeBlockingUses();
-
-  MemorySlot slot;
-  DominanceInfo &dominance;
-};
-
-class MemorySlotDestructor {
-public:
-  void destructSlot();
-private:
-};
+void destructSlot(DestructibleMemorySlot &slot,
+                  DestructibleAllocationOpInterface allocator,
+                  OpBuilder &builder, MemorySlotDestructionInfo &info);
 
 } // namespace mlir
 
