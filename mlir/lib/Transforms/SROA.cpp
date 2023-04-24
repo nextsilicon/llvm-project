@@ -32,10 +32,10 @@ mlir::computeDestructionInfo(DestructibleMemorySlot &slot) {
     if (auto accessor =
             dyn_cast<DestructibleAccessorOpInterface>(use.getOwner())) {
       SmallVector<SubElementMemorySlot> subelements;
-      if (!accessor.canRewire(slot, subelements))
-        return {};
-      info.accessors.push_back(accessor);
-      continue;
+      if (accessor.canRewire(slot, subelements)) {
+        info.accessors.push_back(accessor);
+        continue;
+      }
     }
 
     SmallPtrSet<OpOperand *, 4> &blockingUses =
