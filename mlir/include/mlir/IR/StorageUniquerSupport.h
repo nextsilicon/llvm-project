@@ -62,6 +62,9 @@ namespace StorageUserTrait {
 /// `TypeTrait::IsMutable` instead.
 template <typename ConcreteType>
 struct IsMutable : public StorageUserTraitBase<ConcreteType, IsMutable> {};
+
+template <typename ConcreteType>
+struct IsDistinct : public StorageUserTraitBase<ConcreteType, IsMutable> {};
 } // namespace StorageUserTrait
 
 //===----------------------------------------------------------------------===//

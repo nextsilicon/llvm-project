@@ -200,11 +200,40 @@ namespace detail {
 // MLIRContext. This class manages all creation and uniquing of attributes.
 class AttributeUniquer {
 public:
-  /// Get an uniqued instance of an attribute T.
+  using HasTraitFn = AbstractAttribute::HasTraitFn;
+
+  /// Get an instance of an attribute T.
   template <typename T, typename... Args>
   static T get(MLIRContext *ctx, Args &&...args) {
-    return getWithTypeID<T, Args...>(ctx, T::getTypeID(),
-                                     std::forward<Args>(args)...);
+    if (isDistinct(ctx, T::getHasTraitFn()))
+      return getDistinctWithTypeID<T>(ctx, T::getTypeID(),
+                                      std::forward<Args>(args)...);
+
+    return getWithTypeID<T>(ctx, T::getTypeID(), std::forward<Args>(args)...);
+  }
+
+  /// Get an distinct instance of an attribute T.
+  template <typename T, typename... Args>
+  static T getDistinctWithTypeID(MLIRContext *ctx, TypeID typeID,
+                                 Args &&...args) {
+    int64_t distinctHash = getDistinctHash(ctx);
+#ifndef NDEBUG
+    if (!ctx->getAttributeUniquer().isParametricStorageInitialized(typeID))
+      llvm::report_fatal_error(
+          llvm::Twine("can't create Attribute '") + llvm::getTypeName<T>() +
+          "' because storage uniquer isn't initialized: the dialect was likely "
+          "not loaded, or the attribute wasn't added with addAttributes<...>() "
+          "in the Dialect::initialize() method.");
+#endif
+    return ctx->getAttributeUniquer().getDistinct<typename T::ImplType>(
+        [typeID, ctx](AttributeStorage *storage) {
+          initializeAttributeStorage(storage, ctx, typeID);
+
+          // Execute any additional attribute storage initialization with
+          // the context.
+          static_cast<typename T::ImplType *>(storage)->initialize(ctx);
+        },
+        typeID, distinctHash, std::forward<Args>(args)...);
   }
 
   /// Get an uniqued instance of a parametric attribute T.
@@ -261,6 +290,10 @@ public:
   /// Register an attribute instance T with the uniquer.
   template <typename T>
   static void registerAttribute(MLIRContext *ctx) {
+    if (isDistinct(ctx, T::getHasTraitFn()))
+      return ctx->getAttributeUniquer()
+          .registerParametricStorageType<typename T::ImplType>(T::getTypeID());
+
     registerAttribute<T>(ctx, T::getTypeID());
   }
 
@@ -292,6 +325,10 @@ private:
   /// Initialize the given attribute storage instance.
   static void initializeAttributeStorage(AttributeStorage *storage,
                                          MLIRContext *ctx, TypeID attrID);
+
+  static bool isDistinct(MLIRContext *ctx, HasTraitFn &&hasTraitFn);
+
+  static int64_t getDistinctHash(MLIRContext *ctx);
 };
 
 // Internal function called by ODS generated code.

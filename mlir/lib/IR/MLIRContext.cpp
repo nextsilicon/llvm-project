@@ -196,6 +196,9 @@ public:
   /// A mutex used when accessing operation information.
   llvm::sys::SmartRWMutex<true> operationInfoMutex;
 
+  /// A counter used to produce hash values for distinct attributes and types.
+  std::atomic<int64_t> distinctCounter;
+
   //===--------------------------------------------------------------------===//
   // Affine uniquing
   //===--------------------------------------------------------------------===//
@@ -1049,6 +1052,14 @@ void AttributeUniquer::initializeAttributeStorage(AttributeStorage *storage,
                                                   MLIRContext *ctx,
                                                   TypeID attrID) {
   storage->initializeAbstractAttribute(AbstractAttribute::lookup(attrID, ctx));
+}
+
+bool AttributeUniquer::isDistinct(MLIRContext *ctx, HasTraitFn &&hasTraitFn) {
+  return hasTraitFn(TypeID::get<AttributeTrait::IsDistinct>());
+}
+
+int64_t AttributeUniquer::getDistinctHash(MLIRContext *ctx) {
+  return ctx->getImpl().distinctCounter++;
 }
 
 BoolAttr BoolAttr::get(MLIRContext *context, bool value) {

@@ -14,6 +14,7 @@
 #include "mlir/Support/TypeID.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Allocator.h"
 
@@ -184,6 +185,47 @@ public:
   template <typename Storage>
   void registerSingletonStorageType(function_ref<void(Storage *)> initFn = {}) {
     registerSingletonStorageType<Storage>(TypeID::get<Storage>(), initFn);
+  }
+
+  template <typename Storage, typename... Args>
+  Storage *getDistinct(function_ref<void(Storage *)> initFn, TypeID id,
+                       int64_t distinctHash, Args &&...args) {
+    // Construct a value of the derived key type.
+    auto derivedKey = getKey<Storage>(std::forward<Args>(args)...);
+
+    // Generate an equality function for the derived storage.
+    auto isEqual = [](const BaseStorage *) { return false; };
+
+    // Generate a constructor function for the derived storage.
+    auto ctorFn = [&](StorageAllocator &allocator) {
+      auto *storage = Storage::construct(allocator, derivedKey);
+      if (initFn)
+        initFn(storage);
+      return storage;
+    };
+
+    // Get an instance for the derived storage.
+    return static_cast<Storage *>(
+        getParametricStorageTypeImpl(id, distinctHash, isEqual, ctorFn));
+  }
+
+  template <typename Storage>
+  Storage *getDistinct(function_ref<void(Storage *)> initFn, TypeID id,
+                       int64_t distinctHash) {
+    // Generate an equality function for the derived storage.
+    auto isEqual = [](const BaseStorage *) { return false; };
+
+    // Generate a constructor function for the derived storage.
+    auto ctorFn = [&](StorageAllocator &allocator) {
+      auto *storage = new (allocator.allocate<Storage>()) Storage();
+      if (initFn)
+        initFn(storage);
+      return storage;
+    };
+
+    // Get an instance for the derived storage.
+    return static_cast<Storage *>(
+        getParametricStorageTypeImpl(id, distinctHash, isEqual, ctorFn));
   }
 
   /// Gets a uniqued instance of 'Storage'. 'id' is the type id used when

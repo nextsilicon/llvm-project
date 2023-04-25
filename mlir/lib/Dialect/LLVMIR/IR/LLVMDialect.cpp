@@ -2796,10 +2796,11 @@ struct LLVMOpAsmDialectInterface : public OpAsmDialectInterface {
               LoopAnnotationAttr, LoopVectorizeAttr, LoopInterleaveAttr,
               LoopUnrollAttr, LoopUnrollAndJamAttr, LoopLICMAttr,
               LoopDistributeAttr, LoopPipelineAttr, LoopPeeledAttr,
-              LoopUnswitchAttr>([&](auto attr) {
-          os << decltype(attr)::getMnemonic();
-          return AliasResult::OverridableAlias;
-        })
+              LoopUnswitchAttr, AccessGroupAttr, AccessGroupWithNameAttr>(
+            [&](auto attr) {
+              os << decltype(attr)::getMnemonic();
+              return AliasResult::OverridableAlias;
+            })
         .Default([](Attribute) { return AliasResult::NoAlias; });
   }
 };

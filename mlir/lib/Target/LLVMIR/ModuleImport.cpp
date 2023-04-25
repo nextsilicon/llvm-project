@@ -12,6 +12,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Target/LLVMIR/ModuleImport.h"
+#include "mlir/Dialect/LLVMIR/LLVMAttrs.h"
+#include "mlir/IR/Attributes.h"
 #include "mlir/Target/LLVMIR/Import.h"
 
 #include "AttrKindDetail.h"
@@ -1695,6 +1697,23 @@ mlir::translateLLVMIRToModule(std::unique_ptr<llvm::Module> llvmModule,
     return {};
   if (failed(moduleImport.convertFunctions()))
     return {};
+
+  // auto attr = AccessGroupAttr::get(context, StringAttr::get(context, "bla"));
+  // auto attr1 = AccessGroupAttr::get(context, StringAttr::get(context,
+  // "bla"));
+
+  // TODO distinct is ignored in this case...
+  auto attr = AccessGroupAttr::get(context);
+  auto attr1 = AccessGroupAttr::get(context);
+  auto attr2 =
+      AccessGroupWithNameAttr::get(context, StringAttr::get(context, "bla"));
+  auto attr3 =
+      AccessGroupWithNameAttr::get(context, StringAttr::get(context, "bla"));
+
+  module.get()->setAttr("llvm.access_group", attr);
+  module.get()->setAttr("llvm.access_group1", attr1);
+  module.get()->setAttr("llvm.access_group2", attr2);
+  module.get()->setAttr("llvm.access_group3", attr3);
 
   return module;
 }

@@ -526,4 +526,19 @@ def LLVM_MemoryEffectsAttr : LLVM_Attr<"MemoryEffects", "memory_effects"> {
   let assemblyFormat = "`<` struct(params) `>`";
 }
 
+//===----------------------------------------------------------------------===//
+// AccessGroupAttr
+//===----------------------------------------------------------------------===//
+
+def IsDistinct : NativeAttrTrait<"IsDistinct">;
+
+def LLVM_AccessGroupAttr : LLVM_Attr<"AccessGroup", "access_group", [IsDistinct]> {}
+
+def LLVM_AccessGroupWithNameAttr : LLVM_Attr<"AccessGroupWithName", "access_group_with_name", [IsDistinct]> {
+  let parameters = (ins
+   "StringAttr":$name
+  );
+  let assemblyFormat = "`<` struct(params) `>`";
+}
+
 #endif // LLVMIR_ATTRDEFS
