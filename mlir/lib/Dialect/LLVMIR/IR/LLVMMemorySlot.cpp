@@ -256,8 +256,12 @@ DeletionKind LLVM::GEPOp::removeBlockingUses(
 
 bool LLVM::GEPOp::canRewire(
     const DestructibleMemorySlot &slot,
-    ::llvm::SmallPtrSetImpl<::mlir::Attribute> &usedIndices,
-    SmallVectorImpl<SubElementMemorySlot> &subelems) {
+    ::llvm::SmallPtrSetImpl<::mlir::Attribute> &usedIndices) {
+  assert(0 && "todo");
+}
+
+SmallVector<SubElementMemorySlot>
+LLVM::GEPOp::getSubElementMemorySlots(const DestructibleMemorySlot &slot) {
   assert(0 && "todo");
 }
 

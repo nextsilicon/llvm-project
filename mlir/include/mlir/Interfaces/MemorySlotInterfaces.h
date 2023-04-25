@@ -23,13 +23,13 @@ struct MemorySlot {
   Type elemType;
 };
 
-struct DestructibleMemorySlot : public MemorySlot {
+struct DestructibleMemorySlot : MemorySlot {
   /// Maps from an index within the memory slot the type of the pointer that
   /// will be generated to access the element directly.
   DenseMap<Attribute, Type> elementsPtrs;
 };
 
-struct SubElementMemorySlot : public MemorySlot {
+struct SubElementMemorySlot : MemorySlot {
   /// Index of this memory slot in the parent memory slot.
   Attribute subelementIndex;
 };

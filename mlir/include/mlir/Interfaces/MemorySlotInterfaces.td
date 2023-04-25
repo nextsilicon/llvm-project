@@ -76,6 +76,9 @@ def PromotableMemOpInterface : OpInterface<"PromotableMemOpInterface"> {
     to memory slots. Loads and stores must be of whole values of the same
     type as the slot itself.
 
+    For a memory operation on a slot to be valid, it must operate on the slot
+    pointer *only as a pointer to an element of the type of the slot*.
+
     If the same operation does both loads and stores on the same slot, the
     load must semantically happen first.
   }];
@@ -259,8 +262,15 @@ def DestructibleAccessorOpInterface
       "bool",
       "canRewire",
       (ins "const ::mlir::DestructibleMemorySlot &":$slot,
-           "::llvm::SmallPtrSetImpl<::mlir::Attribute> &":$usedIndices,
-           "::llvm::SmallVectorImpl<::mlir::SubElementMemorySlot> &":$subelems)
+           "::llvm::SmallPtrSetImpl<::mlir::Attribute> &":$usedIndices)
+    >,
+    InterfaceMethod<[{
+        For a given destructible memory slot, returns the memory slots generated
+        by this access pointing to subelements of the slot.
+      }],
+      "::llvm::SmallVector<::mlir::SubElementMemorySlot>",
+      "getSubElementMemorySlots",
+      (ins "const ::mlir::DestructibleMemorySlot &":$slot)
     >,
     InterfaceMethod<[{
         Rewires the use of a slot to the generated subslots, without deleting

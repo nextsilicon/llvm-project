@@ -28,11 +28,11 @@ Optional<MemorySlotDestructionInfo>
 mlir::computeDestructionInfo(DestructibleMemorySlot &slot) {
   MemorySlotDestructionInfo info;
 
+  // Initialize the analysis with the immediate users of the slot.
   for (OpOperand &use : slot.ptr.getUses()) {
     if (auto accessor =
             dyn_cast<DestructibleAccessorOpInterface>(use.getOwner())) {
-      SmallVector<SubElementMemorySlot> subelements;
-      if (accessor.canRewire(slot, info.usedIndices, subelements)) {
+      if (accessor.canRewire(slot, info.usedIndices)) {
         info.accessors.push_back(accessor);
         continue;
       }
