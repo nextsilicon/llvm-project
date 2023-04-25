@@ -222,6 +222,7 @@ def DestructibleAllocationOpInterface
       "::llvm::DenseMap<::mlir::Attribute, ::mlir::MemorySlot>",
       "destruct",
       (ins "const ::mlir::DestructibleMemorySlot &":$slot,
+           "::llvm::SmallPtrSetImpl<::mlir::Attribute> &":$usedIndices,
            "::mlir::OpBuilder &":$builder)
     >,
     InterfaceMethod<[{
@@ -252,11 +253,13 @@ def DestructibleAccessorOpInterface
         In case of success, adds to `subelements` the memory slots representing
         the accessed subelements, if any. These slots can only be aliased by
         other SubElementMemorySlots of the same type coming from the same parent
-        slot.
+        slot. This method must also register the indices it will access within
+        the `usedIndices` set.
       }],
       "bool",
       "canRewire",
       (ins "const ::mlir::DestructibleMemorySlot &":$slot,
+           "::llvm::SmallPtrSetImpl<::mlir::Attribute> &":$usedIndices,
            "::llvm::SmallVectorImpl<::mlir::SubElementMemorySlot> &":$subelems)
     >,
     InterfaceMethod<[{
@@ -267,6 +270,25 @@ def DestructibleAccessorOpInterface
       "rewire",
       (ins "const ::mlir::DestructibleMemorySlot &":$slot,
            "::llvm::DenseMap<::mlir::Attribute, ::mlir::MemorySlot> &":$subslots)
+    >
+  ];
+}
+
+def DestructibleTypeInterface
+  : TypeInterface<"DestructibleTypeInterface"> {
+  let description = [{
+    TODO
+  }];
+  let cppNamespace = "::mlir";
+
+  let methods = [
+    InterfaceMethod<[{
+        Destructs the type into subelements into a map of index attributes to
+        types of subelements.
+      }],
+      "::llvm::DenseMap<::mlir::Attribute, ::mlir::Type>",
+      "destruct",
+      (ins)
     >
   ];
 }

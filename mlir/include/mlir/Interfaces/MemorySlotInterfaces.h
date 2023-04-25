@@ -45,6 +45,7 @@ enum class DeletionKind {
 
 } // namespace mlir
 
-#include "mlir/Interfaces/MemorySlotInterfaces.h.inc"
+#include "mlir/Interfaces/MemorySlotOpInterfaces.h.inc"
+#include "mlir/Interfaces/MemorySlotTypeInterfaces.h.inc"
 
 #endif // MLIR_INTERFACES_MEMORYSLOTINTERFACES_H

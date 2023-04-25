@@ -15,6 +15,7 @@
 namespace mlir {
 
 struct MemorySlotDestructionInfo {
+  SmallPtrSet<Attribute, 8> usedIndices;
   DenseMap<Operation *, SmallPtrSet<OpOperand *, 4>> userToBlockingUses;
   SmallVector<DestructibleAccessorOpInterface> accessors;
 };

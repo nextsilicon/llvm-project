@@ -32,7 +32,7 @@ mlir::computeDestructionInfo(DestructibleMemorySlot &slot) {
     if (auto accessor =
             dyn_cast<DestructibleAccessorOpInterface>(use.getOwner())) {
       SmallVector<SubElementMemorySlot> subelements;
-      if (accessor.canRewire(slot, subelements)) {
+      if (accessor.canRewire(slot, info.usedIndices, subelements)) {
         info.accessors.push_back(accessor);
         continue;
       }
@@ -84,7 +84,8 @@ void mlir::destructSlot(DestructibleMemorySlot &slot,
   OpBuilder::InsertionGuard guard(builder);
 
   builder.setInsertionPointToStart(slot.ptr.getParentBlock());
-  DenseMap<Attribute, MemorySlot> subslots = allocator.destruct(slot, builder);
+  DenseMap<Attribute, MemorySlot> subslots =
+      allocator.destruct(slot, info.usedIndices, builder);
 
   llvm::SetVector<Operation *> usersToRewire;
   for (auto &[user, _] : info.userToBlockingUses)
@@ -112,6 +113,9 @@ void mlir::destructSlot(DestructibleMemorySlot &slot,
 
   for (Operation *toEraseOp : toErase)
     toEraseOp->erase();
+
+  assert(slot.ptr.use_empty() && "at the end of destruction, the original slot "
+                                 "pointer should no longer be used");
 
   allocator.handleDestructionComplete(slot);
 }

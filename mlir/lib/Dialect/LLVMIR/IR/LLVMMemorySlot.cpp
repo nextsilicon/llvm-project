@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
+#include "mlir/Dialect/LLVMIR/LLVMTypes.h"
 #include "mlir/Interfaces/MemorySlotInterfaces.h"
 
 using namespace mlir;
@@ -47,6 +48,45 @@ void LLVM::AllocaOp::handlePromotionComplete(const MemorySlot &slot,
                                              Value defaultValue) {
   if (defaultValue && defaultValue.use_empty())
     defaultValue.getDefiningOp()->erase();
+  erase();
+}
+
+SmallVector<DestructibleMemorySlot> LLVM::AllocaOp::getDestructibleSlots() {
+  Type elemType =
+      getElemType() ? *getElemType() : getResult().getType().getElementType();
+  auto destructible = dyn_cast<DestructibleTypeInterface>(elemType);
+  if (!destructible)
+    return {};
+  return {DestructibleMemorySlot{{getResult(), elemType, getLoc()},
+                                 destructible.destruct()}};
+}
+
+DenseMap<Attribute, MemorySlot>
+LLVM::AllocaOp::destruct(const DestructibleMemorySlot &slot,
+                         SmallPtrSetImpl<Attribute> &usedIndices,
+                         OpBuilder &builder) {
+  assert(slot.ptr == getResult());
+  Type elemType =
+      getElemType() ? *getElemType() : getResult().getType().getElementType();
+
+  DenseMap<Attribute, MemorySlot> slotMap;
+  for (auto &[index, type] :
+       cast<DestructibleTypeInterface>(elemType).destruct()) {
+    if (usedIndices.contains(index)) {
+      auto subAlloca = builder.create<LLVM::AllocaOp>(
+          getLoc(), LLVM::LLVMPointerType::get(getContext()), type,
+          getArraySize());
+      slotMap.try_emplace<MemorySlot>(index,
+                                      {subAlloca.getResult(), type, getLoc()});
+    }
+  }
+
+  return slotMap;
+}
+
+void LLVM::AllocaOp::handleDestructionComplete(
+    const DestructibleMemorySlot &slot) {
+  assert(slot.ptr == getResult());
   erase();
 }
 
@@ -195,6 +235,10 @@ static bool hasAllZeroIndices(LLVM::GEPOp gepOp) {
   });
 }
 
+//===----------------------------------------------------------------------===//
+// Interfaces for GEPOp
+//===----------------------------------------------------------------------===//
+
 bool LLVM::GEPOp::canUsesBeRemoved(
     const MemorySlot &slot, const SmallPtrSetImpl<OpOperand *> &blockingUses,
     SmallVectorImpl<OpOperand *> &newBlockingUses) {
@@ -208,4 +252,16 @@ DeletionKind LLVM::GEPOp::removeBlockingUses(
     const MemorySlot &slot, const SmallPtrSetImpl<OpOperand *> &blockingUses,
     OpBuilder &builder) {
   return DeletionKind::Delete;
+}
+
+bool LLVM::GEPOp::canRewire(
+    const DestructibleMemorySlot &slot,
+    ::llvm::SmallPtrSetImpl<::mlir::Attribute> &usedIndices,
+    SmallVectorImpl<SubElementMemorySlot> &subelems) {
+  assert(0 && "todo");
+}
+
+DeletionKind LLVM::GEPOp::rewire(const DestructibleMemorySlot &slot,
+                                 DenseMap<Attribute, MemorySlot> &subslots) {
+  assert(0 && "todo");
 }
