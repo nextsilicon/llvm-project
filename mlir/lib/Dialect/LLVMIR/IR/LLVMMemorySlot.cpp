@@ -58,14 +58,14 @@ SmallVector<DestructibleMemorySlot> LLVM::AllocaOp::getDestructibleSlots() {
   if (!destructible)
     return {};
   return {DestructibleMemorySlot{{getResult(), elemType, getLoc()},
-                                 destructible.destruct()}};
+                                 {destructible.destruct()}}};
 }
 
 DenseMap<Attribute, MemorySlot>
 LLVM::AllocaOp::destruct(const DestructibleMemorySlot &slot,
                          SmallPtrSetImpl<Attribute> &usedIndices,
                          OpBuilder &builder) {
-  assert(slot.ptr == getResult());
+  assert(slot.slot.ptr == getResult());
   Type elemType =
       getElemType() ? *getElemType() : getResult().getType().getElementType();
 
@@ -86,7 +86,7 @@ LLVM::AllocaOp::destruct(const DestructibleMemorySlot &slot,
 
 void LLVM::AllocaOp::handleDestructionComplete(
     const DestructibleMemorySlot &slot) {
-  assert(slot.ptr == getResult());
+  assert(slot.slot.ptr == getResult());
   erase();
 }
 
@@ -169,62 +169,57 @@ static bool forwardToUsers(Operation *op,
 }
 
 bool LLVM::BitcastOp::canUsesBeRemoved(
-    const MemorySlot &slot, const SmallPtrSetImpl<OpOperand *> &blockingUses,
+    const SmallPtrSetImpl<OpOperand *> &blockingUses,
     SmallVectorImpl<OpOperand *> &newBlockingUses) {
   return forwardToUsers(*this, newBlockingUses);
 }
 
 DeletionKind LLVM::BitcastOp::removeBlockingUses(
-    const MemorySlot &slot, const SmallPtrSetImpl<OpOperand *> &blockingUses,
-    OpBuilder &builder) {
+    const SmallPtrSetImpl<OpOperand *> &blockingUses, OpBuilder &builder) {
   return DeletionKind::Delete;
 }
 
 bool LLVM::AddrSpaceCastOp::canUsesBeRemoved(
-    const MemorySlot &slot, const SmallPtrSetImpl<OpOperand *> &blockingUses,
+    const SmallPtrSetImpl<OpOperand *> &blockingUses,
     SmallVectorImpl<OpOperand *> &newBlockingUses) {
   return forwardToUsers(*this, newBlockingUses);
 }
 
 DeletionKind LLVM::AddrSpaceCastOp::removeBlockingUses(
-    const MemorySlot &slot, const SmallPtrSetImpl<OpOperand *> &blockingUses,
-    OpBuilder &builder) {
+    const SmallPtrSetImpl<OpOperand *> &blockingUses, OpBuilder &builder) {
   return DeletionKind::Delete;
 }
 
 bool LLVM::LifetimeStartOp::canUsesBeRemoved(
-    const MemorySlot &slot, const SmallPtrSetImpl<OpOperand *> &blockingUses,
+    const SmallPtrSetImpl<OpOperand *> &blockingUses,
     SmallVectorImpl<OpOperand *> &newBlockingUses) {
   return true;
 }
 
 DeletionKind LLVM::LifetimeStartOp::removeBlockingUses(
-    const MemorySlot &slot, const SmallPtrSetImpl<OpOperand *> &blockingUses,
-    OpBuilder &builder) {
+    const SmallPtrSetImpl<OpOperand *> &blockingUses, OpBuilder &builder) {
   return DeletionKind::Delete;
 }
 
 bool LLVM::LifetimeEndOp::canUsesBeRemoved(
-    const MemorySlot &slot, const SmallPtrSetImpl<OpOperand *> &blockingUses,
+    const SmallPtrSetImpl<OpOperand *> &blockingUses,
     SmallVectorImpl<OpOperand *> &newBlockingUses) {
   return true;
 }
 
 DeletionKind LLVM::LifetimeEndOp::removeBlockingUses(
-    const MemorySlot &slot, const SmallPtrSetImpl<OpOperand *> &blockingUses,
-    OpBuilder &builder) {
+    const SmallPtrSetImpl<OpOperand *> &blockingUses, OpBuilder &builder) {
   return DeletionKind::Delete;
 }
 
 bool LLVM::DbgDeclareOp::canUsesBeRemoved(
-    const MemorySlot &slot, const SmallPtrSetImpl<OpOperand *> &blockingUses,
+    const SmallPtrSetImpl<OpOperand *> &blockingUses,
     SmallVectorImpl<OpOperand *> &newBlockingUses) {
   return true;
 }
 
 DeletionKind LLVM::DbgDeclareOp::removeBlockingUses(
-    const MemorySlot &slot, const SmallPtrSetImpl<OpOperand *> &blockingUses,
-    OpBuilder &builder) {
+    const SmallPtrSetImpl<OpOperand *> &blockingUses, OpBuilder &builder) {
   return DeletionKind::Delete;
 }
 
@@ -240,7 +235,7 @@ static bool hasAllZeroIndices(LLVM::GEPOp gepOp) {
 //===----------------------------------------------------------------------===//
 
 bool LLVM::GEPOp::canUsesBeRemoved(
-    const MemorySlot &slot, const SmallPtrSetImpl<OpOperand *> &blockingUses,
+    const SmallPtrSetImpl<OpOperand *> &blockingUses,
     SmallVectorImpl<OpOperand *> &newBlockingUses) {
   // GEP can be removed as long as it is a no-op and its users can be removed.
   if (!hasAllZeroIndices(*this))
@@ -249,8 +244,7 @@ bool LLVM::GEPOp::canUsesBeRemoved(
 }
 
 DeletionKind LLVM::GEPOp::removeBlockingUses(
-    const MemorySlot &slot, const SmallPtrSetImpl<OpOperand *> &blockingUses,
-    OpBuilder &builder) {
+    const SmallPtrSetImpl<OpOperand *> &blockingUses, OpBuilder &builder) {
   return DeletionKind::Delete;
 }
 
@@ -260,7 +254,7 @@ bool LLVM::GEPOp::canRewire(
   assert(0 && "todo");
 }
 
-SmallVector<SubElementMemorySlot>
+SmallVector<MaybeDestructibleSubElementMemorySlot>
 LLVM::GEPOp::getSubElementMemorySlots(const DestructibleMemorySlot &slot) {
   assert(0 && "todo");
 }

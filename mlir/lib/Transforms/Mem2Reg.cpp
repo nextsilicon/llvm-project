@@ -89,10 +89,9 @@ using namespace mlir;
 /// [1]: Rastello F. & Bouchez Tichadou F., SSA-based Compiler Design (2022),
 ///      Springer.
 
-MemorySlotPromoter::MemorySlotPromoter(MemorySlot slot,
-                           PromotableAllocationOpInterface allocator,
-                           OpBuilder &builder, DominanceInfo &dominance,
-                           MemorySlotPromotionInfo info)
+MemorySlotPromoter::MemorySlotPromoter(
+    MemorySlot slot, PromotableAllocationOpInterface allocator,
+    OpBuilder &builder, DominanceInfo &dominance, MemorySlotPromotionInfo info)
     : slot(slot), allocator(allocator), builder(builder), dominance(dominance),
       info(std::move(info)) {
   bool isResultOrNewBlockArgument = slot.ptr.getDefiningOp() == allocator;
@@ -147,7 +146,7 @@ LogicalResult MemorySlotPromotionAnalyzer::computeBlockingUses(
     // If the operation decides it cannot deal with removing the blocking uses,
     // promotion must fail.
     if (auto promotable = dyn_cast<PromotableOpInterface>(user)) {
-      if (!promotable.canUsesBeRemoved(slot, blockingUses, newBlockingUses))
+      if (!promotable.canUsesBeRemoved(blockingUses, newBlockingUses))
         return failure();
     } else if (auto promotable = dyn_cast<PromotableMemOpInterface>(user)) {
       if (!promotable.canUsesBeRemoved(slot, blockingUses, newBlockingUses))
@@ -388,8 +387,7 @@ void MemorySlotPromoter::removeBlockingUses() {
 
     auto toPromoteBasic = cast<PromotableOpInterface>(toPromote);
     builder.setInsertionPointAfter(toPromote);
-    if (toPromoteBasic.removeBlockingUses(slot,
-                                          info.userToBlockingUses[toPromote],
+    if (toPromoteBasic.removeBlockingUses(info.userToBlockingUses[toPromote],
                                           builder) == DeletionKind::Delete)
       toErase.push_back(toPromote);
   }

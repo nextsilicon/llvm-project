@@ -154,6 +154,8 @@ def PromotableOpInterface : OpInterface<"PromotableOpInterface"> {
 
   let methods = [
     InterfaceMethod<[{
+        TODO
+
         Checks that this operation can be promoted to no longer use the provided
         blocking uses, in the context of promoting `slot`.
 
@@ -161,11 +163,12 @@ def PromotableOpInterface : OpInterface<"PromotableOpInterface"> {
         removed, that dependency should be added to the `newBlockingUses`
         argument. Dependent uses must only be uses of results of this operation.
       }], "bool", "canUsesBeRemoved",
-      (ins "const ::mlir::MemorySlot &":$slot,
-           "const ::llvm::SmallPtrSetImpl<::mlir::OpOperand *> &":$blockingUses,
+      (ins "const ::llvm::SmallPtrSetImpl<::mlir::OpOperand *> &":$blockingUses,
            "::llvm::SmallVectorImpl<::mlir::OpOperand *> &":$newBlockingUses)
     >,
     InterfaceMethod<[{
+        TODO
+
         Transforms IR to ensure that the current operation does not use the
         provided memory slot anymore. In contrast to `PromotableMemOpInterface`,
         operations implementing this interface must not need access to the
@@ -189,8 +192,7 @@ def PromotableOpInterface : OpInterface<"PromotableOpInterface"> {
       }],
       "::mlir::DeletionKind",
       "removeBlockingUses",
-      (ins "const ::mlir::MemorySlot &":$slot,
-           "const ::llvm::SmallPtrSetImpl<mlir::OpOperand *> &":$blockingUses,
+      (ins "const ::llvm::SmallPtrSetImpl<mlir::OpOperand *> &":$blockingUses,
            "::mlir::OpBuilder &":$builder)
     >,
   ];
@@ -268,7 +270,7 @@ def DestructibleAccessorOpInterface
         For a given destructible memory slot, returns the memory slots generated
         by this access pointing to subelements of the slot.
       }],
-      "::llvm::SmallVector<::mlir::SubElementMemorySlot>",
+      "::llvm::SmallVector<::mlir::MaybeDestructibleSubElementMemorySlot>",
       "getSubElementMemorySlots",
       (ins "const ::mlir::DestructibleMemorySlot &":$slot)
     >,
