@@ -241,8 +241,35 @@ def DestructibleAllocationOpInterface
   ];
 }
 
+def TypeSafeMemOpInterface : OpInterface<"TypeSafeMemOpInterface"> {
+  let description = [{
+    TODO
+  }];
+  let cppNamespace = "::mlir";
+
+  let methods = [
+    InterfaceMethod<[{
+        Returns whether all accesses in this operation to the provided slot are
+        done in a type-safe manner. To be type-safe, the access must only load
+        the value in this type as the type of the slot, and without assuming any
+        context around the slot. For example, a type-safe load must not load
+        outside the bounds of the slot.
+
+        If the type-safety of the accesses depends on the type-safety of the
+        accesses to further memory slots, the result of this method will be
+        conditioned to the type-safety of the accesses to the slots added by
+        this method to `mustBeSafelyUsed`.
+      }],
+      "bool",
+      "onlyTypeSafeAccesses",
+      (ins "const ::mlir::MemorySlot &":$slot,
+           "::mlir::SmallVectorImpl<::mlir::MemorySlot> &":$mustBeSafelyUsed)
+    >
+  ];
+}
+
 def DestructibleAccessorOpInterface
-  : OpInterface<"DestructibleAccessorOpInterface"> {
+  : OpInterface<"DestructibleAccessorOpInterface", [TypeSafeMemOpInterface]> {
   let description = [{
     TODO
   }];
@@ -265,14 +292,6 @@ def DestructibleAccessorOpInterface
       "canRewire",
       (ins "const ::mlir::DestructibleMemorySlot &":$slot,
            "::llvm::SmallPtrSetImpl<::mlir::Attribute> &":$usedIndices)
-    >,
-    InterfaceMethod<[{
-        For a given destructible memory slot, returns the memory slots generated
-        by this access pointing to subelements of the slot.
-      }],
-      "::llvm::SmallVector<::mlir::MaybeDestructibleSubElementMemorySlot>",
-      "getSubElementMemorySlots",
-      (ins "const ::mlir::DestructibleMemorySlot &":$slot)
     >,
     InterfaceMethod<[{
         Rewires the use of a slot to the generated subslots, without deleting

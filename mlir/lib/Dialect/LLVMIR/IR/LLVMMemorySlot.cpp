@@ -155,6 +155,16 @@ DeletionKind LLVM::StoreOp::removeBlockingUses(
   return DeletionKind::Delete;
 }
 
+bool LLVM::LoadOp::onlyTypeSafeAccesses(
+    const MemorySlot &slot, SmallVectorImpl<MemorySlot> &mustBeSafelyUsed) {
+  assert(0 && "todo");
+}
+
+bool LLVM::StoreOp::onlyTypeSafeAccesses(
+    const MemorySlot &slot, SmallVectorImpl<MemorySlot> &mustBeSafelyUsed) {
+  assert(0 && "todo");
+}
+
 //===----------------------------------------------------------------------===//
 // Interfaces for discardable OPs
 //===----------------------------------------------------------------------===//
@@ -248,14 +258,14 @@ DeletionKind LLVM::GEPOp::removeBlockingUses(
   return DeletionKind::Delete;
 }
 
-bool LLVM::GEPOp::canRewire(
-    const DestructibleMemorySlot &slot,
-    ::llvm::SmallPtrSetImpl<::mlir::Attribute> &usedIndices) {
+bool LLVM::GEPOp::onlyTypeSafeAccesses(
+    const MemorySlot &slot, SmallVectorImpl<MemorySlot> &mustBeSafelyUsed) {
   assert(0 && "todo");
 }
 
-SmallVector<MaybeDestructibleSubElementMemorySlot>
-LLVM::GEPOp::getSubElementMemorySlots(const DestructibleMemorySlot &slot) {
+bool LLVM::GEPOp::canRewire(
+    const DestructibleMemorySlot &slot,
+    ::llvm::SmallPtrSetImpl<::mlir::Attribute> &usedIndices) {
   assert(0 && "todo");
 }
 

@@ -29,70 +29,45 @@ Optional<MemorySlotDestructionInfo>
 mlir::computeDestructionInfo(DestructibleMemorySlot &slot) {
   MemorySlotDestructionInfo info;
 
+  SmallVector<MemorySlot> usedSafelyWorklist;
+
   // Initialize the analysis with the immediate users of the slot.
   for (OpOperand &use : slot.slot.ptr.getUses()) {
     if (auto accessor =
             dyn_cast<DestructibleAccessorOpInterface>(use.getOwner())) {
       if (accessor.canRewire(slot, info.usedIndices)) {
-        info.accessors.push_back(accessor);
-        continue;
+        if (accessor.onlyTypeSafeAccesses(slot.slot, usedSafelyWorklist)) {
+          info.accessors.push_back(accessor);
+          continue;
+        }
       }
     }
 
+    // If it cannot be shown that the operation uses the slot safely, maybe it
+    // can be promoted out of using the slot?
     SmallPtrSet<OpOperand *, 4> &blockingUses =
         getOrInsertDefault(info.userToBlockingUses, use.getOwner());
     blockingUses.insert(&use);
   }
 
-  struct AccessCheckJob {
-    DestructibleAccessorOpInterface accessor;
-    DestructibleMemorySlot memorySlot;
-  };
+  SmallPtrSet<OpOperand *, 16> dealtWith;
+  while (!usedSafelyWorklist.empty()) {
+    MemorySlot mustBeUsedSafely = usedSafelyWorklist.pop_back_val();
+    for (OpOperand &subslotUse : mustBeUsedSafely.ptr.getUses()) {
+      if (dealtWith.contains(&subslotUse))
+        continue;
+      dealtWith.insert(&subslotUse);
+      Operation *subslotUser = subslotUse.getOwner();
 
-  DenseMap<PromotableMemOpInterface, MemorySlot> shouldBePromotable;
-  SmallVector<AccessCheckJob> accessCheckWorklist;
-  for (DestructibleAccessorOpInterface accessor : info.accessors)
-    accessCheckWorklist.emplace_back<AccessCheckJob>({accessor, slot});
+      if (auto memOp = dyn_cast<TypeSafeMemOpInterface>(subslotUser))
+        if (memOp.onlyTypeSafeAccesses(mustBeUsedSafely, usedSafelyWorklist))
+          continue;
 
-  while (!accessCheckWorklist.empty()) {
-    AccessCheckJob job = accessCheckWorklist.pop_back_val();
-    for (MaybeDestructibleSubElementMemorySlot &subslot :
-         job.accessor.getSubElementMemorySlots(job.memorySlot)) {
-      for (OpOperand &subslotUse : subslot.slot.ptr.getUses()) {
-        bool shouldAbort =
-            TypeSwitch<Operation *, bool>(subslotUse.getOwner())
-                .Case<DestructibleAccessorOpInterface>([&](auto accessor) {
-                  if (!subslot.destructibleInfo)
-                    return true;
-
-                  accessCheckWorklist.emplace_back<AccessCheckJob>(
-                      {accessor,
-                       DestructibleMemorySlot{
-                           subslot.slot, subslot.destructibleInfo.value()}});
-                  return false;
-                })
-                .Case<PromotableMemOpInterface>([&](auto memOp) {
-                  Operation *memOpAsOp = memOp;
-                  SmallPtrSet<OpOperand *, 4> &blockingUses =
-                      getOrInsertDefault(info.userToBlockingUses, memOpAsOp);
-                  blockingUses.insert(&subslotUse);
-
-                  shouldBePromotable.insert({memOp, subslot.slot});
-                  return false;
-                })
-                .Case<PromotableOpInterface>([&](auto promotableOp) {
-                  Operation *promotableOpAsOp = promotableOp;
-                  SmallPtrSet<OpOperand *, 4> &blockingUses =
-                      getOrInsertDefault(info.userToBlockingUses,
-                                         promotableOpAsOp);
-                  blockingUses.insert(&subslotUse);
-                  return false;
-                })
-                .Default([](auto) { return true; });
-
-        if (shouldAbort)
-          return {};
-      }
+      // If it cannot be shown that the operation uses the slot safely, maybe it
+      // can be promoted out of using the slot?
+      SmallPtrSet<OpOperand *, 4> &blockingUses =
+          getOrInsertDefault(info.userToBlockingUses, subslotUser);
+      blockingUses.insert(&subslotUse);
     }
   }
 
@@ -102,15 +77,6 @@ mlir::computeDestructionInfo(DestructibleMemorySlot &slot) {
     // If the next operation has no blocking uses, everything is fine.
     if (!info.userToBlockingUses.contains(user))
       continue;
-
-    // If the operation is a mem op, we just need to check it is promotable if
-    // necessary.
-    if (auto memOp = dyn_cast<PromotableMemOpInterface>(user)) {
-      if (!shouldBePromotable.contains(memOp))
-        continue;
-      MemorySlot concernedSlot = shouldBePromotable.at(memOp);
-      assert(0 && "todo");
-    }
 
     SmallPtrSet<OpOperand *, 4> &blockingUses = info.userToBlockingUses[user];
     auto promotable = dyn_cast<PromotableOpInterface>(user);
