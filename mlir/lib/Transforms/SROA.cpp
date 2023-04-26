@@ -27,6 +27,8 @@ static V &getOrInsertDefault(DenseMap<K, V> &map, K key) {
 
 Optional<MemorySlotDestructionInfo>
 mlir::computeDestructionInfo(DestructibleMemorySlot &slot) {
+  assert(isa<DestructibleTypeInterface>(slot.slot.elemType));
+
   MemorySlotDestructionInfo info;
 
   SmallVector<MemorySlot> usedSafelyWorklist;
@@ -35,11 +37,9 @@ mlir::computeDestructionInfo(DestructibleMemorySlot &slot) {
   for (OpOperand &use : slot.slot.ptr.getUses()) {
     if (auto accessor =
             dyn_cast<DestructibleAccessorOpInterface>(use.getOwner())) {
-      if (accessor.canRewire(slot, info.usedIndices)) {
-        if (accessor.onlyTypeSafeAccesses(slot.slot, usedSafelyWorklist)) {
-          info.accessors.push_back(accessor);
-          continue;
-        }
+      if (accessor.canRewire(slot, info.usedIndices, usedSafelyWorklist)) {
+        info.accessors.push_back(accessor);
+        continue;
       }
     }
 
@@ -59,8 +59,9 @@ mlir::computeDestructionInfo(DestructibleMemorySlot &slot) {
       dealtWith.insert(&subslotUse);
       Operation *subslotUser = subslotUse.getOwner();
 
-      if (auto memOp = dyn_cast<TypeSafeMemOpInterface>(subslotUser))
-        if (memOp.onlyTypeSafeAccesses(mustBeUsedSafely, usedSafelyWorklist))
+      if (auto memOp = dyn_cast<TypeSafeOpInterface>(subslotUser))
+        if (memOp.ensureOnlyTypeSafeAccesses(mustBeUsedSafely,
+                                             usedSafelyWorklist))
           continue;
 
       // If it cannot be shown that the operation uses the slot safely, maybe it

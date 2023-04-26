@@ -210,7 +210,8 @@ def DestructibleAllocationOpInterface
         Returns the list of slots for which destruction should be attempted,
         specifying in which way the slot should be destructed into subslots. The
         subslots are indexed by attributes. The type of the pointers of each
-        subslots to be generated must be provided.
+        subslots to be generated must be provided. The type of the memory slot
+        must implement `DestructibleTypeInterface`.
       }],
       "::llvm::SmallVector<::mlir::DestructibleMemorySlot>",
       "getDestructibleSlots",
@@ -241,7 +242,7 @@ def DestructibleAllocationOpInterface
   ];
 }
 
-def TypeSafeMemOpInterface : OpInterface<"TypeSafeMemOpInterface"> {
+def TypeSafeOpInterface : OpInterface<"TypeSafeOpInterface"> {
   let description = [{
     TODO
   }];
@@ -261,7 +262,7 @@ def TypeSafeMemOpInterface : OpInterface<"TypeSafeMemOpInterface"> {
         this method to `mustBeSafelyUsed`.
       }],
       "bool",
-      "onlyTypeSafeAccesses",
+      "ensureOnlyTypeSafeAccesses",
       (ins "const ::mlir::MemorySlot &":$slot,
            "::mlir::SmallVectorImpl<::mlir::MemorySlot> &":$mustBeSafelyUsed)
     >
@@ -269,7 +270,7 @@ def TypeSafeMemOpInterface : OpInterface<"TypeSafeMemOpInterface"> {
 }
 
 def DestructibleAccessorOpInterface
-  : OpInterface<"DestructibleAccessorOpInterface", [TypeSafeMemOpInterface]> {
+  : OpInterface<"DestructibleAccessorOpInterface"> {
   let description = [{
     TODO
   }];
@@ -282,16 +283,16 @@ def DestructibleAccessorOpInterface
         destruction. This may involve creating new operations, and usually
         amounts to checking the pointer types match.
 
-        In case of success, adds to `subelements` the memory slots representing
-        the accessed subelements, if any. These slots can only be aliased by
-        other SubElementMemorySlots of the same type coming from the same parent
-        slot. This method must also register the indices it will access within
-        the `usedIndices` set.
+        This method must also register the indices it will access within the
+        `usedIndices` set. If the accessor generates new slots mapping to
+        subelements, they must be registered in `mustBeSafelyUsed` to ensure
+        they are used in a locally type-safe manner.
       }],
       "bool",
       "canRewire",
       (ins "const ::mlir::DestructibleMemorySlot &":$slot,
-           "::llvm::SmallPtrSetImpl<::mlir::Attribute> &":$usedIndices)
+           "::llvm::SmallPtrSetImpl<::mlir::Attribute> &":$usedIndices,
+           "::mlir::SmallVectorImpl<::mlir::MemorySlot> &":$mustBeSafelyUsed)
     >,
     InterfaceMethod<[{
         Rewires the use of a slot to the generated subslots, without deleting

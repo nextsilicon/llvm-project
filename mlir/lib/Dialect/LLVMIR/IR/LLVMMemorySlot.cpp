@@ -155,14 +155,14 @@ DeletionKind LLVM::StoreOp::removeBlockingUses(
   return DeletionKind::Delete;
 }
 
-bool LLVM::LoadOp::onlyTypeSafeAccesses(
+bool LLVM::LoadOp::ensureOnlyTypeSafeAccesses(
     const MemorySlot &slot, SmallVectorImpl<MemorySlot> &mustBeSafelyUsed) {
-  assert(0 && "todo");
+  return getAddr() != slot.ptr || getType() == slot.elemType;
 }
 
-bool LLVM::StoreOp::onlyTypeSafeAccesses(
+bool LLVM::StoreOp::ensureOnlyTypeSafeAccesses(
     const MemorySlot &slot, SmallVectorImpl<MemorySlot> &mustBeSafelyUsed) {
-  assert(0 && "todo");
+  return getAddr() != slot.ptr || getValue().getType() == slot.elemType;
 }
 
 //===----------------------------------------------------------------------===//
@@ -258,14 +258,14 @@ DeletionKind LLVM::GEPOp::removeBlockingUses(
   return DeletionKind::Delete;
 }
 
-bool LLVM::GEPOp::onlyTypeSafeAccesses(
+bool LLVM::GEPOp::ensureOnlyTypeSafeAccesses(
     const MemorySlot &slot, SmallVectorImpl<MemorySlot> &mustBeSafelyUsed) {
   assert(0 && "todo");
 }
 
-bool LLVM::GEPOp::canRewire(
-    const DestructibleMemorySlot &slot,
-    ::llvm::SmallPtrSetImpl<::mlir::Attribute> &usedIndices) {
+bool LLVM::GEPOp::canRewire(const DestructibleMemorySlot &slot,
+                            SmallPtrSetImpl<::mlir::Attribute> &usedIndices,
+                            SmallVectorImpl<MemorySlot> &mustBeSafelyUsed) {
   assert(0 && "todo");
 }
 
