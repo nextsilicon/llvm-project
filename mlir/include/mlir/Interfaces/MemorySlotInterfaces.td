@@ -261,7 +261,7 @@ def TypeSafeOpInterface : OpInterface<"TypeSafeOpInterface"> {
         conditioned to the type-safety of the accesses to the slots added by
         this method to `mustBeSafelyUsed`.
       }],
-      "bool",
+      "::mlir::LogicalResult",
       "ensureOnlyTypeSafeAccesses",
       (ins "const ::mlir::MemorySlot &":$slot,
            "::mlir::SmallVectorImpl<::mlir::MemorySlot> &":$mustBeSafelyUsed)
@@ -316,11 +316,21 @@ def DestructibleTypeInterface
   let methods = [
     InterfaceMethod<[{
         Destructs the type into subelements into a map of index attributes to
-        types of subelements.
+        types of subelements. Returns nothing if the type cannot be destructed.
       }],
-      "::llvm::DenseMap<::mlir::Attribute, ::mlir::Type>",
+      "::llvm::Optional<::llvm::DenseMap<::mlir::Attribute, ::mlir::Type>>",
       "destruct",
       (ins)
+    >,
+    InterfaceMethod<[{
+        Indicates which type is held at the provided index, returning a null
+        Type if no type could be computed. While this can return information
+        even when the type cannot be completely destructed, it must be coherent
+        with the values returned by `destruct` when they exist.
+      }],
+      "::mlir::Type",
+      "getTypeAtIndex",
+      (ins "::mlir::Attribute":$index)
     >
   ];
 }

@@ -60,8 +60,8 @@ mlir::computeDestructionInfo(DestructibleMemorySlot &slot) {
       Operation *subslotUser = subslotUse.getOwner();
 
       if (auto memOp = dyn_cast<TypeSafeOpInterface>(subslotUser))
-        if (memOp.ensureOnlyTypeSafeAccesses(mustBeUsedSafely,
-                                             usedSafelyWorklist))
+        if (succeeded(memOp.ensureOnlyTypeSafeAccesses(mustBeUsedSafely,
+                                                       usedSafelyWorklist)))
           continue;
 
       // If it cannot be shown that the operation uses the slot safely, maybe it
@@ -127,16 +127,16 @@ void mlir::destructSlot(DestructibleMemorySlot &slot,
   llvm::SmallVector<Operation *> toErase;
   for (Operation *toRewire : llvm::reverse(sortedUsersToRewire)) {
     builder.setInsertionPointAfter(toRewire);
-    if (auto promotable = dyn_cast<PromotableOpInterface>(toRewire)) {
-      if (promotable.removeBlockingUses(info.userToBlockingUses[promotable],
-                                        builder) == DeletionKind::Delete)
-        toErase.push_back(promotable);
+    if (auto accessor = dyn_cast<DestructibleAccessorOpInterface>(toRewire)) {
+      if (accessor.rewire(slot, subslots) == DeletionKind::Delete)
+        toErase.push_back(accessor);
       continue;
     }
 
-    auto accessor = cast<DestructibleAccessorOpInterface>(toRewire);
-    if (accessor.rewire(slot, subslots) == DeletionKind::Delete)
-      toErase.push_back(accessor);
+    auto promotable = cast<PromotableOpInterface>(toRewire);
+    if (promotable.removeBlockingUses(info.userToBlockingUses[promotable],
+                                      builder) == DeletionKind::Delete)
+      toErase.push_back(promotable);
   }
 
   for (Operation *toEraseOp : toErase)
@@ -164,26 +164,32 @@ struct SROA : public impl::SROABase<SROA> {
 
       // Destructing a slot can allow for further destruction of other slots,
       // destruction is tried until no destruction succeeds.
-      bool justDestructed = true;
-      while (justDestructed) {
-        justDestructed = false;
+      while (true) {
+        struct DestructionJob {
+          DestructibleAllocationOpInterface allocator;
+          DestructibleMemorySlot slot;
+          MemorySlotDestructionInfo info;
+        };
 
-        for (Block &block : region) {
-          for (Operation &op : block.getOperations()) {
+        std::vector<DestructionJob> toDestruct;
+
+        for (Block &block : region)
+          for (Operation &op : block.getOperations())
             if (auto allocator =
-                    llvm::dyn_cast<DestructibleAllocationOpInterface>(op)) {
+                    llvm::dyn_cast<DestructibleAllocationOpInterface>(op))
               for (DestructibleMemorySlot slot :
-                   allocator.getDestructibleSlots()) {
-                if (auto info = computeDestructionInfo(slot)) {
-                  destructSlot(slot, allocator, builder, info.value());
-                  justDestructed = true;
-                }
-              }
-            }
-          }
-        }
+                   allocator.getDestructibleSlots())
+                if (auto info = computeDestructionInfo(slot))
+                  toDestruct.emplace_back<DestructionJob>(
+                      {allocator, slot, std::move(info.value())});
 
-        changed |= justDestructed;
+        if (toDestruct.empty())
+          break;
+
+        for (DestructionJob &job : toDestruct)
+          destructSlot(job.slot, job.allocator, builder, job.info);
+
+        changed = true;
       }
     }
 

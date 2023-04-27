@@ -234,7 +234,7 @@ def LLVM_AllocaOp : LLVM_Op<"alloca",
 
 def LLVM_GEPOp : LLVM_Op<"getelementptr", [Pure,
     DeclareOpInterfaceMethods<PromotableOpInterface>,
-    DeclareOpInterfaceMethods<TypeSafeMemOpInterface>,
+    DeclareOpInterfaceMethods<TypeSafeOpInterface>,
     DeclareOpInterfaceMethods<DestructibleAccessorOpInterface>]> {
   let arguments = (ins LLVM_ScalarOrVectorOf<LLVM_AnyPointer>:$base,
                    Variadic<LLVM_ScalarOrVectorOf<AnyInteger>>:$dynamicIndices,
@@ -320,7 +320,7 @@ def LLVM_GEPOp : LLVM_Op<"getelementptr", [Pure,
 
 def LLVM_LoadOp : LLVM_MemAccessOpBase<"load",
     [DeclareOpInterfaceMethods<PromotableMemOpInterface>,
-     DeclareOpInterfaceMethods<TypeSafeMemOpInterface>]> {
+     DeclareOpInterfaceMethods<TypeSafeOpInterface>]> {
   dag args = (ins Arg<LLVM_PointerTo<LLVM_LoadableType>, "", [MemRead]>:$addr,
               OptionalAttr<I64Attr>:$alignment,
               UnitAttr:$volatile_,
@@ -393,7 +393,7 @@ def LLVM_LoadOp : LLVM_MemAccessOpBase<"load",
 
 def LLVM_StoreOp : LLVM_MemAccessOpBase<"store",
     [DeclareOpInterfaceMethods<PromotableMemOpInterface>,
-     DeclareOpInterfaceMethods<TypeSafeMemOpInterface>]> {
+     DeclareOpInterfaceMethods<TypeSafeOpInterface>]> {
   dag args = (ins LLVM_LoadableType:$value,
               Arg<LLVM_PointerTo<LLVM_LoadableType>,"",[MemWrite]>:$addr,
               OptionalAttr<I64Attr>:$alignment,
