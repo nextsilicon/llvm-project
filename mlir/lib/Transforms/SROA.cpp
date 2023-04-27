@@ -181,7 +181,7 @@ struct SROA : public impl::SROABase<SROA> {
                    allocator.getDestructibleSlots())
                 if (auto info = computeDestructionInfo(slot))
                   toDestruct.emplace_back<DestructionJob>(
-                      {allocator, slot, std::move(info.value())});
+                      {allocator, std::move(slot), std::move(info.value())});
 
         if (toDestruct.empty())
           break;
