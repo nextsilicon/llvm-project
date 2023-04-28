@@ -20,11 +20,6 @@ namespace mlir {
 
 using namespace mlir;
 
-template <typename K, typename V>
-static V &getOrInsertDefault(DenseMap<K, V> &map, K key) {
-  return map.try_emplace(key).first->second;
-}
-
 Optional<MemorySlotDestructionInfo>
 mlir::computeDestructionInfo(DestructibleMemorySlot &slot) {
   assert(isa<DestructibleTypeInterface>(slot.slot.elemType));
@@ -46,7 +41,7 @@ mlir::computeDestructionInfo(DestructibleMemorySlot &slot) {
     // If it cannot be shown that the operation uses the slot safely, maybe it
     // can be promoted out of using the slot?
     SmallPtrSet<OpOperand *, 4> &blockingUses =
-        getOrInsertDefault(info.userToBlockingUses, use.getOwner());
+        info.userToBlockingUses.getOrInsertDefault(use.getOwner());
     blockingUses.insert(&use);
   }
 
@@ -67,7 +62,7 @@ mlir::computeDestructionInfo(DestructibleMemorySlot &slot) {
       // If it cannot be shown that the operation uses the slot safely, maybe it
       // can be promoted out of using the slot?
       SmallPtrSet<OpOperand *, 4> &blockingUses =
-          getOrInsertDefault(info.userToBlockingUses, subslotUser);
+          info.userToBlockingUses.getOrInsertDefault(subslotUser);
       blockingUses.insert(&subslotUse);
     }
   }
@@ -99,7 +94,7 @@ mlir::computeDestructionInfo(DestructibleMemorySlot &slot) {
              user->result_end());
 
       SmallPtrSetImpl<OpOperand *> &newUserBlockingUseSet =
-          getOrInsertDefault(info.userToBlockingUses, blockingUse->getOwner());
+          info.userToBlockingUses.getOrInsertDefault(blockingUse->getOwner());
       newUserBlockingUseSet.insert(blockingUse);
     }
   }
