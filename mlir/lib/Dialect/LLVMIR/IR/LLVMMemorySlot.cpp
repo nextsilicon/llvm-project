@@ -16,6 +16,7 @@
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/Interfaces/MemorySlotInterfaces.h"
 #include "mlir/Support/LogicalResult.h"
+#include "llvm/ADT/STLExtras.h"
 
 using namespace mlir;
 
@@ -280,26 +281,27 @@ DeletionKind LLVM::GEPOp::removeBlockingUses(
   return DeletionKind::Delete;
 }
 
-static std::pair<Type, Attribute> computeReachedGEPType(LLVM::GEPOp gep) {
-  bool isCheckingPointer = true;
+static Type computeReachedGEPType(LLVM::GEPOp gep) {
+  if (gep.getIndices().empty())
+    return {};
+
+  // Check the pointer indexing only targets the first element.
+  auto firstIndex = gep.getIndices()[0];
+  IntegerAttr indexInt = firstIndex.dyn_cast<IntegerAttr>();
+  if (!indexInt || indexInt.getInt() != 0)
+    return {};
+
   Optional<Type> maybeSelectedType = gep.getElemType();
   if (!maybeSelectedType)
     return {};
   Type selectedType = maybeSelectedType.value();
-  Attribute firstLevelIndex;
-  for (const auto &index : gep.getIndices()) {
+
+  // Follow the indexed elements in the gep.
+  for (const auto &index : llvm::drop_begin(gep.getIndices())) {
     IntegerAttr indexInt = index.dyn_cast<IntegerAttr>();
     if (!indexInt)
       return {};
-    if (isCheckingPointer) {
-      isCheckingPointer = false;
-      if (indexInt.getInt() != 0)
-        return {};
-      continue;
-    }
     assert(!selectedType.isa<LLVM::LLVMPointerType>());
-    if (!firstLevelIndex)
-      firstLevelIndex = indexInt;
     auto destructible = selectedType.dyn_cast<DestructibleTypeInterface>();
     if (!destructible)
       return {};
@@ -308,7 +310,8 @@ static std::pair<Type, Attribute> computeReachedGEPType(LLVM::GEPOp gep) {
       return {};
     selectedType = field;
   }
-  return std::make_pair(selectedType, firstLevelIndex);
+
+  return selectedType;
 }
 
 LogicalResult LLVM::GEPOp::ensureOnlyTypeSafeAccesses(
@@ -317,7 +320,7 @@ LogicalResult LLVM::GEPOp::ensureOnlyTypeSafeAccesses(
     return success();
   if (slot.elemType != getElemType())
     return failure();
-  auto [reachedType, _] = computeReachedGEPType(*this);
+  Type reachedType = computeReachedGEPType(*this);
   if (!reachedType)
     return failure();
   mustBeSafelyUsed.emplace_back<MemorySlot>({getResult(), reachedType});
@@ -329,9 +332,10 @@ bool LLVM::GEPOp::canRewire(const DestructibleMemorySlot &slot,
                             SmallVectorImpl<MemorySlot> &mustBeSafelyUsed) {
   if (getBase() != slot.slot.ptr || slot.slot.elemType != getElemType())
     return false;
-  auto [reachedType, firstLevelIndex] = computeReachedGEPType(*this);
-  if (!reachedType || !firstLevelIndex)
+  Type reachedType = computeReachedGEPType(*this);
+  if (!reachedType || getIndices().size() < 2)
     return false;
+  auto firstLevelIndex = cast<IntegerAttr>(getIndices()[1]);
   assert(slot.info.elementsPtrs.contains(firstLevelIndex));
   if (!slot.info.elementsPtrs.at(firstLevelIndex).isa<LLVM::LLVMPointerType>())
     return false;

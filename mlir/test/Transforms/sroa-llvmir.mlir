@@ -163,7 +163,6 @@ llvm.func @use(!llvm.ptr)
 
 // -----
 
-
 // CHECK-LABEL: llvm.func @no_dynamic_indexing
 llvm.func @no_dynamic_indexing() -> i32 {
   // CHECK: %[[SIZE:.*]] = llvm.mlir.constant(1 : i32)
