@@ -23,31 +23,17 @@ struct MemorySlot {
   Type elemType;
 };
 
+/// Information about the destruction procedure of a destructible memory slot.
 struct DestructibleSlotInfo {
   /// Maps from an index within the memory slot the type of the pointer that
   /// will be generated to access the element directly.
-  DenseMap<Attribute, Type> elementsPtrs;
+  DenseMap<Attribute, Type> elementPtrs;
 };
 
-struct SubElementSlotInfo {
-  /// Index of this memory slot in the parent memory slot.
-  Attribute subelementIndex;
-};
-
+/// Memory slot attached with information about its destruction procedure.
 struct DestructibleMemorySlot {
   MemorySlot slot;
   DestructibleSlotInfo info;
-};
-
-struct SubElementMemorySlot {
-  MemorySlot slot;
-  SubElementSlotInfo info;
-};
-
-struct MaybeDestructibleSubElementMemorySlot {
-  MemorySlot slot;
-  SubElementSlotInfo subElementInfo;
-  Optional<DestructibleSlotInfo> destructibleInfo;
 };
 
 /// Returned by operation promotion logic requesting the deletion of an

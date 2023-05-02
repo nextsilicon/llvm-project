@@ -154,10 +154,8 @@ def PromotableOpInterface : OpInterface<"PromotableOpInterface"> {
 
   let methods = [
     InterfaceMethod<[{
-        TODO
-
         Checks that this operation can be promoted to no longer use the provided
-        blocking uses, in the context of promoting `slot`.
+        blocking uses, in order to allow optimization.
 
         If the removal procedure of the use will require that other uses get
         removed, that dependency should be added to the `newBlockingUses`
@@ -167,12 +165,11 @@ def PromotableOpInterface : OpInterface<"PromotableOpInterface"> {
            "::llvm::SmallVectorImpl<::mlir::OpOperand *> &":$newBlockingUses)
     >,
     InterfaceMethod<[{
-        TODO
-
         Transforms IR to ensure that the current operation does not use the
-        provided memory slot anymore. In contrast to `PromotableMemOpInterface`,
-        operations implementing this interface must not need access to the
-        reaching definition of the content of the slot.
+        provided blocking uses anymore. In contrast to
+        `PromotableMemOpInterface`, operations implementing this interface
+        must not need access to the reaching definition of the content of the
+        slot.
 
         During the transformation, *no operation should be deleted*.
         The operation can only schedule its own deletion by returning the
@@ -201,7 +198,8 @@ def PromotableOpInterface : OpInterface<"PromotableOpInterface"> {
 def DestructibleAllocationOpInterface
   : OpInterface<"DestructibleAllocationOpInterface"> {
   let description = [{
-    TODO
+    Describes operations allocating memory slots of aggregates that can be
+    destructed into multiple smaller allocations.
   }];
   let cppNamespace = "::mlir";
 
@@ -244,7 +242,7 @@ def DestructibleAllocationOpInterface
 
 def TypeSafeOpInterface : OpInterface<"TypeSafeOpInterface"> {
   let description = [{
-    TODO
+    Describes operations using memory slots in a type-safe manner.
   }];
   let cppNamespace = "::mlir";
 
@@ -272,7 +270,7 @@ def TypeSafeOpInterface : OpInterface<"TypeSafeOpInterface"> {
 def DestructibleAccessorOpInterface
   : OpInterface<"DestructibleAccessorOpInterface"> {
   let description = [{
-    TODO
+    Describes operations that can access a sub-element of a destructible slot.
   }];
   let cppNamespace = "::mlir";
 
@@ -309,7 +307,7 @@ def DestructibleAccessorOpInterface
 def DestructibleTypeInterface
   : TypeInterface<"DestructibleTypeInterface"> {
   let description = [{
-    TODO
+    Describes a type that can be broken down into indexable sub-element types.
   }];
   let cppNamespace = "::mlir";
 
