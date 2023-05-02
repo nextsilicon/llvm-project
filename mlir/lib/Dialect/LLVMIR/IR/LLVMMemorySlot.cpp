@@ -14,6 +14,7 @@
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/LLVMIR/LLVMTypes.h"
 #include "mlir/IR/BuiltinAttributes.h"
+#include "mlir/IR/Matchers.h"
 #include "mlir/Interfaces/MemorySlotInterfaces.h"
 #include "mlir/Support/LogicalResult.h"
 #include "llvm/ADT/STLExtras.h"
@@ -55,16 +56,12 @@ void LLVM::AllocaOp::handlePromotionComplete(const MemorySlot &slot,
 }
 
 SmallVector<DestructibleMemorySlot> LLVM::AllocaOp::getDestructibleSlots() {
-  auto numElem = dyn_cast<LLVM::ConstantOp>(getArraySize().getDefiningOp());
-  if (!numElem)
-    return {};
-  auto numElemIntAttr = numElem.getValue().dyn_cast<IntegerAttr>();
-  if (!numElemIntAttr || !numElemIntAttr.getType().isSignlessInteger() ||
-      numElemIntAttr.getInt() != 1)
+  if (!mlir::matchPattern(getArraySize(), m_One()))
     return {};
 
-  Type elemType =
-      getElemType() ? *getElemType() : getResult().getType().getElementType();
+  Type elemType = getElemType().has_value()
+                      ? *getElemType()
+                      : getResult().getType().getElementType();
   auto destructible = dyn_cast<DestructibleTypeInterface>(elemType);
   if (!destructible)
     return {};
@@ -75,9 +72,8 @@ SmallVector<DestructibleMemorySlot> LLVM::AllocaOp::getDestructibleSlots() {
     return {};
 
   DenseMap<Attribute, Type> allocaTypeMap;
-  for (Attribute index : llvm::make_first_range(destructedType.value())) {
+  for (Attribute index : llvm::make_first_range(destructedType.value()))
     allocaTypeMap.insert({index, LLVM::LLVMPointerType::get(getContext())});
-  }
 
   return {DestructibleMemorySlot{{getResult(), elemType}, {allocaTypeMap}}};
 }
@@ -282,7 +278,10 @@ DeletionKind LLVM::GEPOp::removeBlockingUses(
   return DeletionKind::Delete;
 }
 
+/// TODO: Support non-opaque pointers.
 static Type computeReachedGEPType(LLVM::GEPOp gep) {
+  assert(gep.getBase().getType().cast<LLVM::LLVMPointerType>().isOpaque());
+
   if (gep.getIndices().empty())
     return {};
 
@@ -295,17 +294,22 @@ static Type computeReachedGEPType(LLVM::GEPOp gep) {
   Optional<Type> maybeSelectedType = gep.getElemType();
   if (!maybeSelectedType)
     return {};
-  Type selectedType = maybeSelectedType.value();
+  Type selectedType = *maybeSelectedType;
 
   // Follow the indexed elements in the gep.
   for (const auto &index : llvm::drop_begin(gep.getIndices())) {
+    // Ensure the index is static and obtain it.
     IntegerAttr indexInt = index.dyn_cast<IntegerAttr>();
     if (!indexInt)
       return {};
+
+    // Ensure the structure of the type being indexed can be reasoned about.
     assert(!selectedType.isa<LLVM::LLVMPointerType>());
     auto destructible = selectedType.dyn_cast<DestructibleTypeInterface>();
     if (!destructible)
       return {};
+
+    // Follow the type at the index the gep is accessing.
     Type field = destructible.getTypeAtIndex(indexInt);
     if (!field)
       return {};
@@ -360,9 +364,8 @@ DeletionKind LLVM::GEPOp::rewire(const DestructibleMemorySlot &slot,
   }
 
   // Rewire the indices by popping off the second index.
-  SmallVector<int32_t> newIndices;
-  newIndices.reserve(remainingIndices.size() + 1);
-  newIndices.push_back(0);
+  // Start with a single zero, then add the indices beyond the second.
+  SmallVector<int32_t> newIndices(1);
   newIndices.append(remainingIndices.begin(), remainingIndices.end());
   setRawConstantIndices(newIndices);
 

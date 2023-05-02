@@ -215,9 +215,18 @@ def SCCP : Pass<"sccp"> {
 }
 
 def SROA : Pass<"sroa"> {
-  let summary = "TODO";
+  let summary = "Scalar Replacement of Aggregates";
   let description = [{
-    TODO
+    Scalar Replacement of Aggregates. Replaces allocations of aggregates into
+    independant allocations of its elements.
+
+    Allocators must implement `DestructibleAllocationOpInterface` to provide
+    the list of memory slots for which destruction should be attempted.
+
+    This pass will only be applied if all accessors of the aggregate implement
+    the `DestructibleAccessorOpInterface`. If the accessors provide a view
+    into the struct, users of the view must ensure it is used in a type-safe
+    manner and within bounds by implementing `TypeSafeOpInterface`.
   }];
 }
 
