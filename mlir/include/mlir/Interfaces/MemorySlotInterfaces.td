@@ -207,8 +207,8 @@ def DestructibleAllocationOpInterface
     InterfaceMethod<[{
         Returns the list of slots for which destruction should be attempted,
         specifying in which way the slot should be destructed into subslots. The
-        subslots are indexed by attributes. The type of the pointers of each
-        subslots to be generated must be provided. The type of the memory slot
+        subslots are indexed by attributes. This computes the type of the
+        pointers of each subslots to be generated. The type of the memory slot
         must implement `DestructibleTypeInterface`.
       }],
       "::llvm::SmallVector<::mlir::DestructibleMemorySlot>",
@@ -317,7 +317,7 @@ def DestructibleTypeInterface
         types of subelements. Returns nothing if the type cannot be destructed.
       }],
       "::llvm::Optional<::llvm::DenseMap<::mlir::Attribute, ::mlir::Type>>",
-      "destruct",
+      "getDestructedLayout",
       (ins)
     >,
     InterfaceMethod<[{

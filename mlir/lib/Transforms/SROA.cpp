@@ -11,6 +11,7 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/Interfaces/MemorySlotInterfaces.h"
 #include "mlir/Transforms/Passes.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/TypeSwitch.h"
 
 namespace mlir {
@@ -22,14 +23,20 @@ using namespace mlir;
 
 Optional<MemorySlotDestructionInfo>
 mlir::computeDestructionInfo(DestructibleMemorySlot &slot) {
-  assert(isa<DestructibleTypeInterface>(slot.slot.elemType));
+  assert(isa<DestructibleTypeInterface>(slot.elemType));
 
   MemorySlotDestructionInfo info;
 
   SmallVector<MemorySlot> usedSafelyWorklist;
 
+  auto scheduleAsBlockingUse = [&](OpOperand &use) {
+    SmallPtrSet<OpOperand *, 4> &blockingUses =
+        info.userToBlockingUses.getOrInsertDefault(use.getOwner());
+    blockingUses.insert(&use);
+  };
+
   // Initialize the analysis with the immediate users of the slot.
-  for (OpOperand &use : slot.slot.ptr.getUses()) {
+  for (OpOperand &use : slot.ptr.getUses()) {
     if (auto accessor =
             dyn_cast<DestructibleAccessorOpInterface>(use.getOwner())) {
       if (accessor.canRewire(slot, info.usedIndices, usedSafelyWorklist)) {
@@ -40,9 +47,7 @@ mlir::computeDestructionInfo(DestructibleMemorySlot &slot) {
 
     // If it cannot be shown that the operation uses the slot safely, maybe it
     // can be promoted out of using the slot?
-    SmallPtrSet<OpOperand *, 4> &blockingUses =
-        info.userToBlockingUses.getOrInsertDefault(use.getOwner());
-    blockingUses.insert(&use);
+    scheduleAsBlockingUse(use);
   }
 
   SmallPtrSet<OpOperand *, 16> dealtWith;
@@ -61,14 +66,12 @@ mlir::computeDestructionInfo(DestructibleMemorySlot &slot) {
 
       // If it cannot be shown that the operation uses the slot safely, maybe it
       // can be promoted out of using the slot?
-      SmallPtrSet<OpOperand *, 4> &blockingUses =
-          info.userToBlockingUses.getOrInsertDefault(subslotUser);
-      blockingUses.insert(&subslotUse);
+      scheduleAsBlockingUse(subslotUse);
     }
   }
 
   SetVector<Operation *> forwardSlice;
-  mlir::getForwardSlice(slot.slot.ptr, &forwardSlice);
+  mlir::getForwardSlice(slot.ptr, &forwardSlice);
   for (Operation *user : forwardSlice) {
     // If the next operation has no blocking uses, everything is fine.
     if (!info.userToBlockingUses.contains(user))
@@ -90,8 +93,7 @@ mlir::computeDestructionInfo(DestructibleMemorySlot &slot) {
 
     // Then, register any new blocking uses for coming operations.
     for (OpOperand *blockingUse : newBlockingUses) {
-      assert(llvm::find(user->getResults(), blockingUse->get()) !=
-             user->result_end());
+      assert(llvm::is_contained(user->getResults(), blockingUse->get()));
 
       SmallPtrSetImpl<OpOperand *> &newUserBlockingUseSet =
           info.userToBlockingUses.getOrInsertDefault(blockingUse->getOwner());
@@ -107,7 +109,7 @@ void mlir::destructSlot(DestructibleMemorySlot &slot,
                         OpBuilder &builder, MemorySlotDestructionInfo &info) {
   OpBuilder::InsertionGuard guard(builder);
 
-  builder.setInsertionPointToStart(slot.slot.ptr.getParentBlock());
+  builder.setInsertionPointToStart(slot.ptr.getParentBlock());
   DenseMap<Attribute, MemorySlot> subslots =
       allocator.destruct(slot, info.usedIndices, builder);
 
@@ -137,9 +139,8 @@ void mlir::destructSlot(DestructibleMemorySlot &slot,
   for (Operation *toEraseOp : toErase)
     toEraseOp->erase();
 
-  assert(slot.slot.ptr.use_empty() &&
-         "at the end of destruction, the original slot "
-         "pointer should no longer be used");
+  assert(slot.ptr.use_empty() && "at the end of destruction, the original slot "
+                                 "pointer should no longer be used");
 
   allocator.handleDestructionComplete(slot);
 }
@@ -168,15 +169,12 @@ struct SROA : public impl::SROABase<SROA> {
 
         std::vector<DestructionJob> toDestruct;
 
-        for (Block &block : region)
-          for (Operation &op : block.getOperations())
-            if (auto allocator =
-                    llvm::dyn_cast<DestructibleAllocationOpInterface>(op))
-              for (DestructibleMemorySlot slot :
-                   allocator.getDestructibleSlots())
-                if (auto info = computeDestructionInfo(slot))
-                  toDestruct.emplace_back<DestructionJob>(
-                      {allocator, std::move(slot), std::move(info.value())});
+        region.walk([&](DestructibleAllocationOpInterface allocator) {
+          for (DestructibleMemorySlot slot : allocator.getDestructibleSlots())
+            if (auto info = computeDestructionInfo(slot))
+              toDestruct.emplace_back<DestructionJob>(
+                  {allocator, std::move(slot), std::move(info.value())});
+        });
 
         if (toDestruct.empty())
           break;

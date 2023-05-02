@@ -202,8 +202,9 @@ public:
                               Location loc) const;
 
   /// Destructs the struct into its indexed field types.
-  Optional<DenseMap<Attribute, Type>> destruct();
+  Optional<DenseMap<Attribute, Type>> getDestructedLayout();
 
+  /// Retyurns which type is stored at a given integer index within the struct.
   Type getTypeAtIndex(Attribute index);
 };
 

@@ -26,6 +26,9 @@ struct MemorySlotDestructionInfo {
 Optional<MemorySlotDestructionInfo>
 computeDestructionInfo(DestructibleMemorySlot &slot);
 
+/// Performs the destruction of a destructible slot given associated destruction
+/// information. The provided slot will be destructed in subslots by its
+/// allocator.
 void destructSlot(DestructibleMemorySlot &slot,
                   DestructibleAllocationOpInterface allocator,
                   OpBuilder &builder, MemorySlotDestructionInfo &info);
