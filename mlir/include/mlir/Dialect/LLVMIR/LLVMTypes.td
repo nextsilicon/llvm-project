@@ -26,7 +26,7 @@ class LLVMType<string typeName, string typeMnemonic, list<Trait> traits = []>
 
 def LLVMArrayType : LLVMType<"LLVMArray", "array", [
     DeclareTypeInterfaceMethods<DataLayoutTypeInterface, ["getTypeSize"]>,
-    DeclareTypeInterfaceMethods<DestructibleTypeInterface>]> {
+    DeclareTypeInterfaceMethods<DestructurableTypeInterface>]> {
   let summary = "LLVM array type";
   let description = [{
     The `!llvm.array` type represents a fixed-size array of element types.

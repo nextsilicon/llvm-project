@@ -104,7 +104,7 @@ DEFINE_TRIVIAL_LLVM_TYPE(LLVMMetadataType);
 class LLVMStructType
     : public Type::TypeBase<LLVMStructType, Type, detail::LLVMStructTypeStorage,
                             DataLayoutTypeInterface::Trait,
-                            DestructibleTypeInterface::Trait,
+                            DestructurableTypeInterface::Trait,
                             TypeTrait::IsMutable> {
 public:
   /// Inherit base constructors.

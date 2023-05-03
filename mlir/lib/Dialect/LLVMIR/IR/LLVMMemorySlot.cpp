@@ -60,31 +60,31 @@ void LLVM::AllocaOp::handlePromotionComplete(const MemorySlot &slot,
   erase();
 }
 
-SmallVector<DestructibleMemorySlot> LLVM::AllocaOp::getDestructibleSlots() {
+SmallVector<DestructurableMemorySlot> LLVM::AllocaOp::getDestructurableSlots() {
   if (!mlir::matchPattern(getArraySize(), m_One()))
     return {};
 
   Type elemType = getAllocaElementType(*this);
-  auto destructible = dyn_cast<DestructibleTypeInterface>(elemType);
-  if (!destructible)
+  auto destructurable = dyn_cast<DestructurableTypeInterface>(elemType);
+  if (!destructurable)
     return {};
 
-  Optional<DenseMap<Attribute, Type>> destructedType =
-      destructible.getSubelementIndexMap();
-  if (!destructedType)
+  Optional<DenseMap<Attribute, Type>> destructuredType =
+      destructurable.getSubelementIndexMap();
+  if (!destructuredType)
     return {};
 
   DenseMap<Attribute, Type> allocaTypeMap;
-  for (Attribute index : llvm::make_first_range(destructedType.value()))
+  for (Attribute index : llvm::make_first_range(destructuredType.value()))
     allocaTypeMap.insert({index, LLVM::LLVMPointerType::get(getContext())});
 
-  return {DestructibleMemorySlot{{getResult(), elemType}, {allocaTypeMap}}};
+  return {DestructurableMemorySlot{{getResult(), elemType}, {allocaTypeMap}}};
 }
 
 DenseMap<Attribute, MemorySlot>
-LLVM::AllocaOp::destruct(const DestructibleMemorySlot &slot,
-                         SmallPtrSetImpl<Attribute> &usedIndices,
-                         OpBuilder &builder) {
+LLVM::AllocaOp::destructure(const DestructurableMemorySlot &slot,
+                            SmallPtrSetImpl<Attribute> &usedIndices,
+                            OpBuilder &builder) {
   assert(slot.ptr == getResult());
   Type elemType =
       getElemType() ? *getElemType() : getResult().getType().getElementType();
@@ -92,9 +92,9 @@ LLVM::AllocaOp::destruct(const DestructibleMemorySlot &slot,
   builder.setInsertionPointAfter(*this);
 
   DenseMap<Attribute, MemorySlot> slotMap;
-  Optional<DenseMap<Attribute, Type>> destructedType =
-      cast<DestructibleTypeInterface>(elemType).getSubelementIndexMap();
-  for (auto &[index, type] : destructedType.value()) {
+  Optional<DenseMap<Attribute, Type>> destructuredType =
+      cast<DestructurableTypeInterface>(elemType).getSubelementIndexMap();
+  for (auto &[index, type] : destructuredType.value()) {
     if (usedIndices.contains(index)) {
       auto subAlloca = builder.create<LLVM::AllocaOp>(
           getLoc(), LLVM::LLVMPointerType::get(getContext()), type,
@@ -106,8 +106,8 @@ LLVM::AllocaOp::destruct(const DestructibleMemorySlot &slot,
   return slotMap;
 }
 
-void LLVM::AllocaOp::handleDestructionComplete(
-    const DestructibleMemorySlot &slot) {
+void LLVM::AllocaOp::handleDestructuringComplete(
+    const DestructurableMemorySlot &slot) {
   assert(slot.ptr == getResult());
   erase();
 }
@@ -310,13 +310,13 @@ static Type computeReachedGEPType(LLVM::GEPOp gep) {
 
     // Ensure the structure of the type being indexed can be reasoned about.
     assert(!selectedType.isa<LLVM::LLVMPointerType>());
-    auto destructible = selectedType.dyn_cast<DestructibleTypeInterface>();
-    if (!destructible)
+    auto destructurable = selectedType.dyn_cast<DestructurableTypeInterface>();
+    if (!destructurable)
       return {};
 
     // Follow the type at the index the gep is accessing, making it the new type
     // used for indexing.
-    Type field = destructible.getTypeAtIndex(indexInt);
+    Type field = destructurable.getTypeAtIndex(indexInt);
     if (!field)
       return {};
     selectedType = field;
@@ -340,7 +340,7 @@ LogicalResult LLVM::GEPOp::ensureOnlyTypeSafeAccesses(
   return success();
 }
 
-bool LLVM::GEPOp::canRewire(const DestructibleMemorySlot &slot,
+bool LLVM::GEPOp::canRewire(const DestructurableMemorySlot &slot,
                             SmallPtrSetImpl<Attribute> &usedIndices,
                             SmallVectorImpl<MemorySlot> &mustBeSafelyUsed) {
   if (getBase() != slot.ptr || slot.elemType != getElemType())
@@ -357,7 +357,7 @@ bool LLVM::GEPOp::canRewire(const DestructibleMemorySlot &slot,
   return true;
 }
 
-DeletionKind LLVM::GEPOp::rewire(const DestructibleMemorySlot &slot,
+DeletionKind LLVM::GEPOp::rewire(const DestructurableMemorySlot &slot,
                                  DenseMap<Attribute, MemorySlot> &subslots) {
   IntegerAttr firstLevelIndex = getIndices()[1].dyn_cast<IntegerAttr>();
   const MemorySlot &newSlot = subslots.at(firstLevelIndex);
@@ -387,7 +387,7 @@ DeletionKind LLVM::GEPOp::rewire(const DestructibleMemorySlot &slot,
 }
 
 //===----------------------------------------------------------------------===//
-// Interfaces for destructible types
+// Interfaces for destructurable types
 //===----------------------------------------------------------------------===//
 
 Optional<DenseMap<Attribute, Type>>
@@ -412,8 +412,8 @@ Type LLVM::LLVMStructType::getTypeAtIndex(Attribute index) {
 
 Optional<DenseMap<Attribute, Type>>
 LLVM::LLVMArrayType::getSubelementIndexMap() const {
-  constexpr size_t maxArraySizeForDestruction = 16;
-  if (getNumElements() > maxArraySizeForDestruction)
+  constexpr size_t maxArraySizeForDestructuring = 16;
+  if (getNumElements() > maxArraySizeForDestructuring)
     return {};
   int32_t numElements = getNumElements();
 

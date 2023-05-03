@@ -21,11 +21,11 @@ namespace mlir {
 
 using namespace mlir;
 
-Optional<MemorySlotDestructionInfo>
-mlir::computeDestructionInfo(DestructibleMemorySlot &slot) {
-  assert(isa<DestructibleTypeInterface>(slot.elemType));
+Optional<MemorySlotDestructuringInfo>
+mlir::computeDestructuringInfo(DestructurableMemorySlot &slot) {
+  assert(isa<DestructurableTypeInterface>(slot.elemType));
 
-  MemorySlotDestructionInfo info;
+  MemorySlotDestructuringInfo info;
 
   SmallVector<MemorySlot> usedSafelyWorklist;
 
@@ -38,7 +38,7 @@ mlir::computeDestructionInfo(DestructibleMemorySlot &slot) {
   // Initialize the analysis with the immediate users of the slot.
   for (OpOperand &use : slot.ptr.getUses()) {
     if (auto accessor =
-            dyn_cast<DestructibleAccessorOpInterface>(use.getOwner())) {
+            dyn_cast<DestructurableAccessorOpInterface>(use.getOwner())) {
       if (accessor.canRewire(slot, info.usedIndices, usedSafelyWorklist)) {
         info.accessors.push_back(accessor);
         continue;
@@ -80,13 +80,13 @@ mlir::computeDestructionInfo(DestructibleMemorySlot &slot) {
     auto promotable = dyn_cast<PromotableOpInterface>(user);
 
     // An operation that has blocking uses must be promoted. If it is not
-    // promotable, destruction must fail.
+    // promotable, destructuring must fail.
     if (!promotable)
       return {};
 
     SmallVector<OpOperand *> newBlockingUses;
     // If the operation decides it cannot deal with removing the blocking uses,
-    // destruction must fail.
+    // destructuring must fail.
     if (!promotable.canUsesBeRemoved(blockingUses, newBlockingUses))
       return {};
 
@@ -103,26 +103,27 @@ mlir::computeDestructionInfo(DestructibleMemorySlot &slot) {
   return info;
 }
 
-void mlir::destructSlot(DestructibleMemorySlot &slot,
-                        DestructibleAllocationOpInterface allocator,
-                        OpBuilder &builder, MemorySlotDestructionInfo &info) {
+void mlir::destructureSlot(DestructurableMemorySlot &slot,
+                           DestructurableAllocationOpInterface allocator,
+                           OpBuilder &builder,
+                           MemorySlotDestructuringInfo &info) {
   OpBuilder::InsertionGuard guard(builder);
 
   builder.setInsertionPointToStart(slot.ptr.getParentBlock());
   DenseMap<Attribute, MemorySlot> subslots =
-      allocator.destruct(slot, info.usedIndices, builder);
+      allocator.destructure(slot, info.usedIndices, builder);
 
   SetVector<Operation *> usersToRewire;
   for (Operation *user : llvm::make_first_range(info.userToBlockingUses))
     usersToRewire.insert(user);
-  for (DestructibleAccessorOpInterface accessor : info.accessors)
+  for (DestructurableAccessorOpInterface accessor : info.accessors)
     usersToRewire.insert(accessor);
   usersToRewire = mlir::topologicalSort(usersToRewire);
 
   llvm::SmallVector<Operation *> toErase;
   for (Operation *toRewire : llvm::reverse(usersToRewire)) {
     builder.setInsertionPointAfter(toRewire);
-    if (auto accessor = dyn_cast<DestructibleAccessorOpInterface>(toRewire)) {
+    if (auto accessor = dyn_cast<DestructurableAccessorOpInterface>(toRewire)) {
       if (accessor.rewire(slot, subslots) == DeletionKind::Delete)
         toErase.push_back(accessor);
       continue;
@@ -137,10 +138,10 @@ void mlir::destructSlot(DestructibleMemorySlot &slot,
   for (Operation *toEraseOp : toErase)
     toEraseOp->erase();
 
-  assert(slot.ptr.use_empty() && "at the end of destruction, the original slot "
+  assert(slot.ptr.use_empty() && "after destructuring, the original slot "
                                  "pointer should no longer be used");
 
-  allocator.handleDestructionComplete(slot);
+  allocator.handleDestructuringComplete(slot);
 }
 
 namespace {
@@ -156,29 +157,30 @@ struct SROA : public impl::SROABase<SROA> {
 
       OpBuilder builder(&region.front(), region.front().begin());
 
-      // Destructing a slot can allow for further destruction of other slots,
-      // destruction is tried until no destruction succeeds.
+      // Destructuring a slot can allow for further destructuring of other
+      // slots, so destructuring is tried until no destructuring succeeds.
       while (true) {
-        struct DestructionJob {
-          DestructibleAllocationOpInterface allocator;
-          DestructibleMemorySlot slot;
-          MemorySlotDestructionInfo info;
+        struct DestructuringJob {
+          DestructurableAllocationOpInterface allocator;
+          DestructurableMemorySlot slot;
+          MemorySlotDestructuringInfo info;
         };
 
-        std::vector<DestructionJob> toDestruct;
+        std::vector<DestructuringJob> toDestructure;
 
-        region.walk([&](DestructibleAllocationOpInterface allocator) {
-          for (DestructibleMemorySlot slot : allocator.getDestructibleSlots())
-            if (auto info = computeDestructionInfo(slot))
-              toDestruct.emplace_back<DestructionJob>(
+        region.walk([&](DestructurableAllocationOpInterface allocator) {
+          for (DestructurableMemorySlot slot :
+               allocator.getDestructurableSlots())
+            if (auto info = computeDestructuringInfo(slot))
+              toDestructure.emplace_back<DestructuringJob>(
                   {allocator, std::move(slot), std::move(info.value())});
         });
 
-        if (toDestruct.empty())
+        if (toDestructure.empty())
           break;
 
-        for (DestructionJob &job : toDestruct)
-          destructSlot(job.slot, job.allocator, builder, job.info);
+        for (DestructuringJob &job : toDestructure)
+          destructureSlot(job.slot, job.allocator, builder, job.info);
 
         changed = true;
       }

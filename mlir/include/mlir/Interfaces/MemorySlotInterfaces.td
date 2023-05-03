@@ -195,24 +195,24 @@ def PromotableOpInterface : OpInterface<"PromotableOpInterface"> {
   ];
 }
 
-def DestructibleAllocationOpInterface
-  : OpInterface<"DestructibleAllocationOpInterface"> {
+def DestructurableAllocationOpInterface
+  : OpInterface<"DestructurableAllocationOpInterface"> {
   let description = [{
     Describes operations allocating memory slots of aggregates that can be
-    destructed into multiple smaller allocations.
+    destructured into multiple smaller allocations.
   }];
   let cppNamespace = "::mlir";
 
   let methods = [
     InterfaceMethod<[{
-        Returns the list of slots for which destruction should be attempted,
-        specifying in which way the slot should be destructed into subslots. The
-        subslots are indexed by attributes. This computes the type of the
+        Returns the list of slots for which destructuring should be attempted,
+        specifying in which way the slot should be destructured into subslots.
+        The subslots are indexed by attributes. This computes the type of the
         pointers of each subslots to be generated. The type of the memory slot
-        must implement `DestructibleTypeInterface`.
+        must implement `DestructurableTypeInterface`.
       }],
-      "::llvm::SmallVector<::mlir::DestructibleMemorySlot>",
-      "getDestructibleSlots",
+      "::llvm::SmallVector<::mlir::DestructurableMemorySlot>",
+      "getDestructurableSlots",
       (ins)
     >,
     InterfaceMethod<[{
@@ -224,18 +224,18 @@ def DestructibleAllocationOpInterface
         pointer is defined.
       }],
       "::llvm::DenseMap<::mlir::Attribute, ::mlir::MemorySlot>",
-      "destruct",
-      (ins "const ::mlir::DestructibleMemorySlot &":$slot,
+      "destructure",
+      (ins "const ::mlir::DestructurableMemorySlot &":$slot,
            "::llvm::SmallPtrSetImpl<::mlir::Attribute> &":$usedIndices,
            "::mlir::OpBuilder &":$builder)
     >,
     InterfaceMethod<[{
-        Hook triggered once the destruction of a slot is complete, meaning the
+        Hook triggered once the destructuring of a slot is complete, meaning the
         original slot is no longer being refered to and could be deleted.
         This will only be called for slots declared by this operation.
       }],
-      "void", "handleDestructionComplete",
-      (ins "const ::mlir::DestructibleMemorySlot &":$slot)
+      "void", "handleDestructuringComplete",
+      (ins "const ::mlir::DestructurableMemorySlot &":$slot)
     >,
   ];
 }
@@ -267,18 +267,18 @@ def TypeSafeOpInterface : OpInterface<"TypeSafeOpInterface"> {
   ];
 }
 
-def DestructibleAccessorOpInterface
-  : OpInterface<"DestructibleAccessorOpInterface"> {
+def DestructurableAccessorOpInterface
+  : OpInterface<"DestructurableAccessorOpInterface"> {
   let description = [{
-    Describes operations that can access a sub-element of a destructible slot.
+    Describes operations that can access a sub-element of a destructurable slot.
   }];
   let cppNamespace = "::mlir";
 
   let methods = [
     InterfaceMethod<[{
-        For a given destructible memory slot, returns whether this operation can
+        For a given destructurable memory slot, returns whether this operation can
         rewire its uses of the slot to use the slots generated after
-        destruction. This may involve creating new operations, and usually
+        destructuring. This may involve creating new operations, and usually
         amounts to checking if the pointer types match.
 
         This method must also register the indices it will access within the
@@ -288,7 +288,7 @@ def DestructibleAccessorOpInterface
       }],
       "bool",
       "canRewire",
-      (ins "const ::mlir::DestructibleMemorySlot &":$slot,
+      (ins "const ::mlir::DestructurableMemorySlot &":$slot,
            "::llvm::SmallPtrSetImpl<::mlir::Attribute> &":$usedIndices,
            "::mlir::SmallVectorImpl<::mlir::MemorySlot> &":$mustBeSafelyUsed)
     >,
@@ -298,14 +298,14 @@ def DestructibleAccessorOpInterface
       }],
       "::mlir::DeletionKind",
       "rewire",
-      (ins "const ::mlir::DestructibleMemorySlot &":$slot,
+      (ins "const ::mlir::DestructurableMemorySlot &":$slot,
            "::llvm::DenseMap<::mlir::Attribute, ::mlir::MemorySlot> &":$subslots)
     >
   ];
 }
 
-def DestructibleTypeInterface
-  : TypeInterface<"DestructibleTypeInterface"> {
+def DestructurableTypeInterface
+  : TypeInterface<"DestructurableTypeInterface"> {
   let description = [{
     Describes a type that can be broken down into indexable sub-element types.
   }];
@@ -313,8 +313,8 @@ def DestructibleTypeInterface
 
   let methods = [
     InterfaceMethod<[{
-        Destructs the type into subelements into a map of index attributes to
-        types of subelements. Returns nothing if the type cannot be destructed.
+        Destructures the type into subelements into a map of index attributes to
+        types of subelements. Returns nothing if the type cannot be destructured.
       }],
       "::llvm::Optional<::llvm::DenseMap<::mlir::Attribute, ::mlir::Type>>",
       "getSubelementIndexMap",
@@ -323,7 +323,7 @@ def DestructibleTypeInterface
     InterfaceMethod<[{
         Indicates which type is held at the provided index, returning a null
         Type if no type could be computed. While this can return information
-        even when the type cannot be completely destructed, it must be coherent
+        even when the type cannot be completely destructured, it must be coherent
         with the types returned by `getSubelementIndexMap` when they exist.
       }],
       "::mlir::Type",

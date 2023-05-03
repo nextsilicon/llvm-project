@@ -23,8 +23,8 @@ struct MemorySlot {
   Type elemType;
 };
 
-/// Memory slot attached with information about its destruction procedure.
-struct DestructibleMemorySlot : MemorySlot {
+/// Memory slot attached with information about its destructuring procedure.
+struct DestructurableMemorySlot : MemorySlot {
   /// Maps an index within the memory slot to the type of the pointer that
   /// will be generated to access the element directly.
   DenseMap<Attribute, Type> elementPtrs;

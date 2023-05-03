@@ -14,24 +14,24 @@
 
 namespace mlir {
 
-struct MemorySlotDestructionInfo {
+struct MemorySlotDestructuringInfo {
   SmallPtrSet<Attribute, 8> usedIndices;
   DenseMap<Operation *, SmallPtrSet<OpOperand *, 4>> userToBlockingUses;
-  SmallVector<DestructibleAccessorOpInterface> accessors;
+  SmallVector<DestructurableAccessorOpInterface> accessors;
 };
 
-/// Computes information for slot destruction leading to promotion. This will
-/// compute whether this slot can be destructed. Returns nothing if the slot
-/// cannot be destructed.
-Optional<MemorySlotDestructionInfo>
-computeDestructionInfo(DestructibleMemorySlot &slot);
+/// Computes information for slot destructuring. This will compute whether this
+/// slot can be destructured and data to perform the destructuring. Returns
+/// nothing if the slot cannot be destructured.
+Optional<MemorySlotDestructuringInfo>
+computeDestructuringInfo(DestructurableMemorySlot &slot);
 
-/// Performs the destruction of a destructible slot given associated destruction
-/// information. The provided slot will be destructed in subslots by its
-/// allocator.
-void destructSlot(DestructibleMemorySlot &slot,
-                  DestructibleAllocationOpInterface allocator,
-                  OpBuilder &builder, MemorySlotDestructionInfo &info);
+/// Performs the destructuring of a destructible slot given associated
+/// destructuring information. The provided slot will be destructured in
+/// subslots as specified by its allocator.
+void destructureSlot(DestructurableMemorySlot &slot,
+                     DestructurableAllocationOpInterface allocator,
+                     OpBuilder &builder, MemorySlotDestructuringInfo &info);
 
 } // namespace mlir
 
