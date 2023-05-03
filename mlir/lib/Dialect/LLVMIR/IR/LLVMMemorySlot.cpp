@@ -392,13 +392,10 @@ DeletionKind LLVM::GEPOp::rewire(const DestructibleMemorySlot &slot,
 
 Optional<DenseMap<Attribute, Type>>
 LLVM::LLVMStructType::getSubelementIndexMap() {
-  int32_t index = 0;
   Type i32 = IntegerType::get(getContext(), 32);
   DenseMap<Attribute, Type> destructured;
-  for (Type elemType : getBody()) {
+  for (auto const &[index, elemType] : llvm::enumerate(getBody()))
     destructured.insert({IntegerAttr::get(i32, index), elemType});
-    index++;
-  }
   return destructured;
 }
 
@@ -408,20 +405,21 @@ Type LLVM::LLVMStructType::getTypeAtIndex(Attribute index) {
     return {};
   int32_t indexInt = indexAttr.getInt();
   ArrayRef<Type> body = getBody();
-  if (indexInt < 0 || body.size() <= ((uint32_t)indexInt))
+  if (indexInt < 0 || body.size() <= static_cast<uint32_t>(indexInt))
     return {};
   return body[indexInt];
 }
 
 Optional<DenseMap<Attribute, Type>>
 LLVM::LLVMArrayType::getSubelementIndexMap() const {
-  if (getNumElements() > 16)
+  constexpr size_t maxArraySizeForDestruction = 16;
+  if (getNumElements() > maxArraySizeForDestruction)
     return {};
   int32_t numElements = getNumElements();
 
   Type i32 = IntegerType::get(getContext(), 32);
   DenseMap<Attribute, Type> destructured;
-  for (int32_t index = 0; index < numElements; index++)
+  for (int32_t index = 0; index < numElements; ++index)
     destructured.insert({IntegerAttr::get(i32, index), getElementType()});
   return destructured;
 }
@@ -431,7 +429,7 @@ Type LLVM::LLVMArrayType::getTypeAtIndex(Attribute index) const {
   if (!indexAttr || !indexAttr.getType().isInteger(32))
     return {};
   int32_t indexInt = indexAttr.getInt();
-  if (indexInt < 0 || getNumElements() <= ((uint32_t)indexInt))
+  if (indexInt < 0 || getNumElements() <= static_cast<uint32_t>(indexInt))
     return {};
   return getElementType();
 }
