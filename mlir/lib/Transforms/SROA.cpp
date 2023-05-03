@@ -50,13 +50,12 @@ mlir::computeDestructionInfo(DestructibleMemorySlot &slot) {
     scheduleAsBlockingUse(use);
   }
 
-  SmallPtrSet<OpOperand *, 16> dealtWith;
+  SmallPtrSet<OpOperand *, 16> visited;
   while (!usedSafelyWorklist.empty()) {
     MemorySlot mustBeUsedSafely = usedSafelyWorklist.pop_back_val();
     for (OpOperand &subslotUse : mustBeUsedSafely.ptr.getUses()) {
-      if (dealtWith.contains(&subslotUse))
+      if (!visited.insert(&subslotUse).second)
         continue;
-      dealtWith.insert(&subslotUse);
       Operation *subslotUser = subslotUse.getOwner();
 
       if (auto memOp = dyn_cast<TypeSafeOpInterface>(subslotUser))
@@ -113,16 +112,15 @@ void mlir::destructSlot(DestructibleMemorySlot &slot,
   DenseMap<Attribute, MemorySlot> subslots =
       allocator.destruct(slot, info.usedIndices, builder);
 
-  llvm::SetVector<Operation *> usersToRewire;
-  for (auto &[user, _] : info.userToBlockingUses)
+  SetVector<Operation *> usersToRewire;
+  for (Operation *user : llvm::make_first_range(info.userToBlockingUses))
     usersToRewire.insert(user);
   for (DestructibleAccessorOpInterface accessor : info.accessors)
     usersToRewire.insert(accessor);
-  SetVector<Operation *> sortedUsersToRewire =
-      mlir::topologicalSort(usersToRewire);
+  usersToRewire = mlir::topologicalSort(usersToRewire);
 
   llvm::SmallVector<Operation *> toErase;
-  for (Operation *toRewire : llvm::reverse(sortedUsersToRewire)) {
+  for (Operation *toRewire : llvm::reverse(usersToRewire)) {
     builder.setInsertionPointAfter(toRewire);
     if (auto accessor = dyn_cast<DestructibleAccessorOpInterface>(toRewire)) {
       if (accessor.rewire(slot, subslots) == DeletionKind::Delete)

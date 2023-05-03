@@ -21,9 +21,9 @@ struct MemorySlotPromotionInfo {
   /// Blocks for which at least two definitions of the slot values clash.
   SmallPtrSet<Block *, 8> mergePoints;
   /// Contains, for each operation, which uses must be eliminated by promotion.
-  /// This is a DAG structure because an operation that must eliminate some of
-  /// its uses always comes from a request from an operation that must
-  /// eliminate some of its own uses.
+  /// This is a DAG structure because if an operation must eliminate some of
+  /// its uses, it is because the parents of the uses it must eliminate must
+  /// eliminate uses themselves.
   DenseMap<Operation *, SmallPtrSet<OpOperand *, 4>> userToBlockingUses;
 };
 

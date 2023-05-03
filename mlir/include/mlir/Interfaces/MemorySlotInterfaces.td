@@ -279,7 +279,7 @@ def DestructibleAccessorOpInterface
         For a given destructible memory slot, returns whether this operation can
         rewire its uses of the slot to use the slots generated after
         destruction. This may involve creating new operations, and usually
-        amounts to checking the pointer types match.
+        amounts to checking if the pointer types match.
 
         This method must also register the indices it will access within the
         `usedIndices` set. If the accessor generates new slots mapping to
