@@ -25,13 +25,18 @@ using namespace mlir;
 // Interfaces for AllocaOp
 //===----------------------------------------------------------------------===//
 
+static Type getAllocaElementType(LLVM::AllocaOp alloca) {
+  // This will become trivial once non-opaque pointers are gone.
+  return alloca.getElemType().has_value()
+             ? *alloca.getElemType()
+             : alloca.getResult().getType().getElementType();
+}
+
 llvm::SmallVector<MemorySlot> LLVM::AllocaOp::getPromotableSlots() {
   if (!getOperation()->getBlock()->isEntryBlock())
     return {};
 
-  Type elemType =
-      getElemType() ? *getElemType() : getResult().getType().getElementType();
-  return {MemorySlot{getResult(), elemType}};
+  return {MemorySlot{getResult(), getAllocaElementType(*this)}};
 }
 
 Value LLVM::AllocaOp::getDefaultValue(const MemorySlot &slot,
@@ -59,15 +64,13 @@ SmallVector<DestructibleMemorySlot> LLVM::AllocaOp::getDestructibleSlots() {
   if (!mlir::matchPattern(getArraySize(), m_One()))
     return {};
 
-  Type elemType = getElemType().has_value()
-                      ? *getElemType()
-                      : getResult().getType().getElementType();
+  Type elemType = getAllocaElementType(*this);
   auto destructible = dyn_cast<DestructibleTypeInterface>(elemType);
   if (!destructible)
     return {};
 
   Optional<DenseMap<Attribute, Type>> destructedType =
-      destructible.getDestructedLayout();
+      destructible.getSubelementIndexMap();
   if (!destructedType)
     return {};
 
@@ -90,7 +93,7 @@ LLVM::AllocaOp::destruct(const DestructibleMemorySlot &slot,
 
   DenseMap<Attribute, MemorySlot> slotMap;
   Optional<DenseMap<Attribute, Type>> destructedType =
-      cast<DestructibleTypeInterface>(elemType).getDestructedLayout();
+      cast<DestructibleTypeInterface>(elemType).getSubelementIndexMap();
   for (auto &[index, type] : destructedType.value()) {
     if (usedIndices.contains(index)) {
       auto subAlloca = builder.create<LLVM::AllocaOp>(
@@ -291,6 +294,8 @@ static Type computeReachedGEPType(LLVM::GEPOp gep) {
   if (!indexInt || indexInt.getInt() != 0)
     return {};
 
+  // Set the initial type currently being used for indexing. This will be
+  // updated as the indices get walked over.
   Optional<Type> maybeSelectedType = gep.getElemType();
   if (!maybeSelectedType)
     return {};
@@ -309,13 +314,16 @@ static Type computeReachedGEPType(LLVM::GEPOp gep) {
     if (!destructible)
       return {};
 
-    // Follow the type at the index the gep is accessing.
+    // Follow the type at the index the gep is accessing, making it the new type
+    // used for indexing.
     Type field = destructible.getTypeAtIndex(indexInt);
     if (!field)
       return {};
     selectedType = field;
   }
 
+  // When there are no more indices, the type currently being used for indexing
+  // is the type of the value pointed at by the returned indexed pointer.
   return selectedType;
 }
 
@@ -383,7 +391,7 @@ DeletionKind LLVM::GEPOp::rewire(const DestructibleMemorySlot &slot,
 //===----------------------------------------------------------------------===//
 
 Optional<DenseMap<Attribute, Type>>
-LLVM::LLVMStructType::getDestructedLayout() {
+LLVM::LLVMStructType::getSubelementIndexMap() {
   int32_t index = 0;
   Type i32 = IntegerType::get(getContext(), 32);
   DenseMap<Attribute, Type> destructured;
@@ -406,7 +414,7 @@ Type LLVM::LLVMStructType::getTypeAtIndex(Attribute index) {
 }
 
 Optional<DenseMap<Attribute, Type>>
-LLVM::LLVMArrayType::getDestructedLayout() const {
+LLVM::LLVMArrayType::getSubelementIndexMap() const {
   if (getNumElements() > 16)
     return {};
   int32_t numElements = getNumElements();

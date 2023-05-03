@@ -317,14 +317,14 @@ def DestructibleTypeInterface
         types of subelements. Returns nothing if the type cannot be destructed.
       }],
       "::llvm::Optional<::llvm::DenseMap<::mlir::Attribute, ::mlir::Type>>",
-      "getDestructedLayout",
+      "getSubelementIndexMap",
       (ins)
     >,
     InterfaceMethod<[{
         Indicates which type is held at the provided index, returning a null
         Type if no type could be computed. While this can return information
         even when the type cannot be completely destructed, it must be coherent
-        with the values returned by `destruct` when they exist.
+        with the types returned by `getSubelementIndexMap` when they exist.
       }],
       "::mlir::Type",
       "getTypeAtIndex",
