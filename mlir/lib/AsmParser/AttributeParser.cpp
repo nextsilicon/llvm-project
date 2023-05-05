@@ -47,6 +47,7 @@ using namespace mlir::detail;
 ///                    | `strided` `<` `[` comma-separated-int-or-question `]`
 ///                      (`,` `offset` `:` integer-literal)? `>`
 ///                    | extended-attribute
+///                    | distinct-attribute
 ///
 Attribute Parser::parseAttribute(Type type) {
   switch (getToken().getKind()) {
@@ -117,6 +118,10 @@ Attribute Parser::parseAttribute(Type type) {
   // Parse an extended attribute, i.e. alias or dialect attribute.
   case Token::hash_identifier:
     return parseExtendedAttr(type);
+
+  // Parse a distinct attribute.
+  case Token::kw_distinct:
+    return parseDistinctAttr(type);
 
   // Parse floating point and integer attributes.
   case Token::floatliteral:
@@ -333,6 +338,41 @@ ParseResult Parser::parseAttributeDict(NamedAttrList &attributes) {
 
   return parseCommaSeparatedList(Delimiter::Braces, parseElt,
                                  " in attribute dictionary");
+}
+
+/// Distinct attribute.
+///
+///  distinct-attribute ::= `distinct`
+///                         `<` integer-literal (`=` attribute-value)? `>`
+///
+Attribute Parser::parseDistinctAttr(Type type) {
+  consumeToken(Token::kw_distinct);
+  if (parseToken(Token::less, "expected '<' after 'distinct'"))
+    return {};
+
+  // Parse the distinct integer identifier.
+  Token token = getToken();
+  if (parseToken(Token::integer, "expected integer identifier"))
+    return {};
+  std::optional<uint64_t> value = token.getUInt64IntegerValue();
+
+  // Parse the optional nested attribute if the distinct integer identifier has
+  // not been seen before.
+  auto it = state.symbols.distinctAttributes.find(*value);
+  if (it == state.symbols.distinctAttributes.end()) {
+    if (parseToken(Token::equal, "expected '='"))
+      return {};
+    Attribute attr = parseAttribute(type);
+    if (!attr || !attr.hasTrait<AttributeTrait::IsDistinct>()) {
+      emitError("expected distinct attribute");
+      return {};
+    }
+    it = state.symbols.distinctAttributes.try_emplace(*value, attr).first;
+  }
+
+  if (parseToken(Token::greater, "expected '>'"))
+    return {};
+  return it->getSecond();
 }
 
 /// Parse a float attribute.

@@ -12,6 +12,7 @@
 #include "Lexer.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/OpImplementation.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringMap.h"
 
 namespace mlir {
@@ -30,6 +31,9 @@ struct SymbolState {
 
   /// A map from type alias identifier to Type.
   llvm::StringMap<Type> typeAliasDefinitions;
+
+  /// A map from distinct integer identifier to Attribute.
+  llvm::DenseMap<uint64_t, Attribute> distinctAttributes;
 
   /// A map of dialect resource keys to the resolved resource name and handle
   /// to use during parsing.

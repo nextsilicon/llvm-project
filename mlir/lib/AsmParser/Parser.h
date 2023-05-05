@@ -253,6 +253,9 @@ public:
   /// Parse an extended attribute.
   Attribute parseExtendedAttr(Type type);
 
+  /// Parse a distinct attribute.
+  Attribute parseDistinctAttr(Type type);
+
   /// Parse a float attribute.
   Attribute parseFloatAttr(Type type, bool isNegative);
 
