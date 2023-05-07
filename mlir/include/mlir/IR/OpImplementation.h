@@ -19,6 +19,7 @@
 #include "llvm/ADT/Twine.h"
 #include "llvm/Support/SMLoc.h"
 #include <optional>
+#include <type_traits>
 
 namespace mlir {
 class AsmParsedResourceEntry;
@@ -142,6 +143,9 @@ public:
     if (succeeded(printAlias(attrOrType)))
       return;
 
+    if constexpr (std::is_base_of_v<Attribute, AttrOrType>)
+      printDistinctPrefix(attrOrType);
+
     raw_ostream &os = getStream();
     uint64_t posPrior = os.tell();
     attrOrType.print(*this);
@@ -151,6 +155,9 @@ public:
     // Fallback to printing with prefix if the above failed to write anything
     // to the output stream.
     *this << attrOrType;
+
+    if constexpr (std::is_base_of_v<Attribute, AttrOrType>)
+      printDistinctSuffix(attrOrType);
   }
 
   /// Print the provided array of attributes or types in the context of an
@@ -173,7 +180,13 @@ public:
             std::enable_if_t<!detect_has_print_method<AttrOrType>::value>
                 *sfinae = nullptr>
   void printStrippedAttrOrType(AttrOrType attrOrType) {
+    if constexpr (std::is_base_of_v<Attribute, AttrOrType>)
+      printDistinctPrefix(attrOrType);
+
     *this << attrOrType;
+
+    if constexpr (std::is_base_of_v<Attribute, AttrOrType>)
+      printDistinctSuffix(attrOrType);
   }
 
   /// Print the given attribute without its type. The corresponding parser must
@@ -238,6 +251,16 @@ private:
   /// Print the alias for the given type, return failure if no alias could
   /// be printed.
   virtual LogicalResult printAlias(Type type);
+
+  virtual void printDistinctPrefix(Attribute attr);
+
+  virtual void printDistinctSuffix(Attribute attr);
+
+  // /// Prints the type wrapped with a distinct identifier if the type
+  // /// is distinct. If the distinct type has been printed before only prints
+  // /// the distinct identifier.
+  // virtual void printOptionalDistinct(Type type,
+  //                                    function_ref<void(Type)> printFn);
 
   /// The internal implementation of the printer.
   Impl *impl{nullptr};

@@ -541,4 +541,12 @@ def LLVM_AccessGroupWithNameAttr : LLVM_Attr<"AccessGroupWithName", "access_grou
   let assemblyFormat = "`<` struct(params) `>`";
 }
 
+def LLVM_AccessGroupWrapperAttr : LLVM_Attr<"AccessGroupWrapper", "access_group_wrapper", []> {
+  let parameters = (ins
+   "AccessGroupAttr":$group
+  );
+  let assemblyFormat = "`<` struct(params) `>`";
+}
+
+
 #endif // LLVMIR_ATTRDEFS

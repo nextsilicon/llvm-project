@@ -26,6 +26,7 @@
 #include "mlir/IR/OpImplementation.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/Verifier.h"
+#include "mlir/Support/LogicalResult.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/MapVector.h"
@@ -377,6 +378,14 @@ public:
   /// Print the alias for the given type, return failure if no alias could
   /// be printed.
   LogicalResult printAlias(Type type);
+
+  void printDistinctPrefix(Attribute attr);
+  void printDistinctSuffix(Attribute attr);
+
+  // /// Prints the type wrapped with a distinct identifier if the type
+  // /// is distinct. If the distinct type has been printed before only prints
+  // /// the distinct identifier.
+  // void printOptionalDistinct(Type type, function_ref<void(Type)> printFn);
 
   /// Print the given location to the stream. If `allowAlias` is true, this
   /// allows for the internal location to use an attribute alias.
@@ -768,6 +777,9 @@ private:
   void printSuccessorAndUseList(Block *, ValueRange) override {}
   void shadowRegionArgs(Region &, ValueRange) override {}
 
+  void printDistinctPrefix(Attribute attr) override {}
+  void printDistinctSuffix(Attribute attr) override {}
+
   /// The printer flags to use when determining potential aliases.
   const OpPrintingFlags &printerFlags;
 
@@ -902,6 +914,9 @@ private:
   void printKeywordOrString(StringRef) override {}
   void printSymbolName(StringRef) override {}
   void printResourceHandle(const AsmDialectResourceHandle &) override {}
+
+  void printDistinctPrefix(Attribute attr) override {}
+  void printDistinctSuffix(Attribute attr) override {}
 
   /// The initializer to use when identifying aliases.
   AliasInitializer &initializer;
@@ -1165,14 +1180,54 @@ void AliasState::printAliases(AsmPrinter::Impl &p, NewLineCounter &newLine,
     } else {
       // TODO: Support nested aliases in mutable attributes.
       Attribute attr = Attribute::getFromOpaquePointer(opaqueSymbol);
-      if (attr.hasTrait<AttributeTrait::IsMutable>())
+      p.printDistinctPrefix(attr);
+      if (attr.hasTrait<AttributeTrait::IsMutable>()) {
         p.getStream() << attr;
-      else
+      } else {
         p.printAttributeImpl(attr);
+      }
+      p.printDistinctSuffix(attr);
     }
 
     p.getStream() << newLine;
   }
+}
+
+//===----------------------------------------------------------------------===//
+// DistinctState
+//===----------------------------------------------------------------------===//
+
+namespace {
+/// This class manages the state for distinct attributes.
+class DistinctState {
+public:
+  /// Initializes the distinct state.
+  void initialize();
+
+  /// Returns a pair consisting of a distinct identifier and a boolean set to
+  /// true if the attribute has been printed before.
+  std::pair<uint64_t, bool> getId(Attribute attr);
+
+private:
+  uint64_t distinctCounter;
+  DenseMap<Attribute, uint64_t> distinctIdentifierMap;
+};
+} // namespace
+
+void DistinctState::initialize() {
+  distinctCounter = 0;
+  distinctIdentifierMap.clear();
+}
+
+std::pair<uint64_t, bool> DistinctState::getId(Attribute attr) {
+  assert(attr.hasTrait<AttributeTrait::IsDistinct>());
+
+  auto [it, inserted] =
+      distinctIdentifierMap.try_emplace(attr, distinctCounter);
+  if (inserted)
+    distinctCounter++;
+
+  return std::make_pair(it->getSecond(), inserted);
 }
 
 //===----------------------------------------------------------------------===//
@@ -1707,10 +1762,14 @@ public:
   /// Initialize the alias state to enable the printing of aliases.
   void initializeAliases(Operation *op) {
     aliasState.initialize(op, printerFlags, interfaces);
+    distinctState.initialize();
   }
 
   /// Get the state used for aliases.
   AliasState &getAliasState() { return aliasState; }
+
+  /// Get the statue used for distinct attributes.
+  DistinctState &getDistinctState() { return distinctState; }
 
   /// Get the state used for SSA names.
   SSANameState &getSSANameState() { return nameState; }
@@ -1754,6 +1813,9 @@ private:
 
   /// The state used for attribute and type aliases.
   AliasState aliasState;
+
+  /// The state used to for distinct attributes.
+  DistinctState distinctState;
 
   /// The state used for SSA value names.
   SSANameState nameState;
@@ -2083,6 +2145,33 @@ LogicalResult AsmPrinter::Impl::printAlias(Type type) {
   return state.getAliasState().getAlias(type, os);
 }
 
+void AsmPrinter::Impl::printDistinctPrefix(Attribute attr) {
+  if (!attr.hasTrait<AttributeTrait::IsDistinct>())
+    return;
+
+  auto [id, inserted] = state.getDistinctState().getId(attr);
+  os << "distinct<" << id;
+  if (inserted)
+    os << " = ";
+  else
+    os << ">";
+}
+
+void AsmPrinter::Impl::printDistinctSuffix(Attribute attr) {
+  if (!attr.hasTrait<AttributeTrait::IsDistinct>())
+    return;
+
+  os << ">";
+}
+
+// void AsmPrinter::Impl::printOptionalDistinct(Type type,
+
+//                                              function_ref<void(Type)>
+//                                              printFn) {
+//   // TODO: Support distinct types.
+//   return printFn(type);
+// }
+
 void AsmPrinter::Impl::printAttribute(Attribute attr,
                                       AttrTypeElision typeElision) {
   if (!attr) {
@@ -2093,11 +2182,13 @@ void AsmPrinter::Impl::printAttribute(Attribute attr,
   // Try to print an alias for this attribute.
   if (succeeded(printAlias(attr)))
     return;
-  return printAttributeImpl(attr, typeElision);
+  printAttributeImpl(attr, typeElision);
 }
 
 void AsmPrinter::Impl::printAttributeImpl(Attribute attr,
                                           AttrTypeElision typeElision) {
+  printDistinctPrefix(attr);
+
   if (!isa<BuiltinDialect>(attr.getDialect())) {
     printDialectAttribute(attr);
   } else if (auto opaqueAttr = attr.dyn_cast<OpaqueAttr>()) {
@@ -2227,6 +2318,7 @@ void AsmPrinter::Impl::printAttributeImpl(Attribute attr,
   } else {
     llvm::report_fatal_error("Unknown builtin attribute");
   }
+
   // Don't print the type if we must elide it, or if it is a None type.
   if (typeElision != AttrTypeElision::Must) {
     if (auto typedAttr = attr.dyn_cast<TypedAttr>()) {
@@ -2237,6 +2329,8 @@ void AsmPrinter::Impl::printAttributeImpl(Attribute attr,
       }
     }
   }
+
+  printDistinctSuffix(attr);
 }
 
 /// Print the integer element of a DenseElementsAttr.
@@ -2663,6 +2757,16 @@ LogicalResult AsmPrinter::printAlias(Attribute attr) {
 LogicalResult AsmPrinter::printAlias(Type type) {
   assert(impl && "expected AsmPrinter::printAlias to be overriden");
   return impl->printAlias(type);
+}
+
+void AsmPrinter::printDistinctPrefix(Attribute attr) {
+  assert(impl && "expected AsmPrinter::printDistinctPrefix to be overriden");
+  impl->printDistinctPrefix(attr);
+}
+
+void AsmPrinter::printDistinctSuffix(Attribute attr) {
+  assert(impl && "expected AsmPrinter::printDistinctSuffix to be overriden");
+  impl->printDistinctSuffix(attr);
 }
 
 void AsmPrinter::printAttributeWithoutType(Attribute attr) {

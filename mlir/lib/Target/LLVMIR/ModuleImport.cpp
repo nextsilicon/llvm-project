@@ -1702,18 +1702,23 @@ mlir::translateLLVMIRToModule(std::unique_ptr<llvm::Module> llvmModule,
   // auto attr1 = AccessGroupAttr::get(context, StringAttr::get(context,
   // "bla"));
 
-  // TODO distinct is ignored in this case...
-  auto attr = AccessGroupAttr::get(context);
-  auto attr1 = AccessGroupAttr::get(context);
-  auto attr2 =
-      AccessGroupWithNameAttr::get(context, StringAttr::get(context, "bla"));
-  auto attr3 =
-      AccessGroupWithNameAttr::get(context, StringAttr::get(context, "bla"));
+  // // TODO distinct is ignored in this case...
+  // auto attr = AccessGroupAttr::get(context);
+  // auto attr1 = AccessGroupAttr::get(context);
+  // auto attr2 =
+  //     AccessGroupWithNameAttr::get(context, StringAttr::get(context, "bla"));
+  // // auto attr3 =
+  // //     AccessGroupWithNameAttr::get(context, StringAttr::get(context,
+  // "bla"));
 
-  module.get()->setAttr("llvm.access_group", attr);
-  module.get()->setAttr("llvm.access_group1", attr1);
-  module.get()->setAttr("llvm.access_group2", attr2);
-  module.get()->setAttr("llvm.access_group3", attr3);
+  // auto attr3 = AccessGroupWrapperAttr::get(context, attr1);
+
+  // module.get()->setAttr("llvm.access_group", attr);
+  // module.get()->setAttr("llvm.access_group1", attr3);
+  // module.get()->setAttr("llvm.access_group2", attr2);
+  // module.get()->setAttr("llvm.access_group3", attr2);
+
+  // // attr1.dump();
 
   return module;
 }
