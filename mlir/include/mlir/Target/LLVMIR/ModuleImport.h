@@ -168,6 +168,12 @@ public:
   /// implement the fastmath interface.
   void setFastmathFlagsAttr(llvm::Instruction *inst, Operation *op) const;
 
+  /// Sets the parameter attributes for the imported operation with the
+  /// parameter attr interface. Asserts if the LLVM instruction is not a
+  /// CallBase.
+  void setParameterAttrAttrs(llvm::Instruction *inst,
+                             ParameterAttrOpInterface iface);
+
   /// Converts all LLVM metadata nodes that translate to operations nested in a
   /// global metadata operation, such as alias analysis or access group
   /// metadata, and builds a map from the metadata nodes to the symbols pointing

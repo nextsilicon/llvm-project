@@ -167,6 +167,54 @@ def AliasAnalysisOpInterface : OpInterface<"AliasAnalysisOpInterface"> {
   ];
 }
 
+def ParameterAttrOpInterface : OpInterface<"ParameterAttrOpInterface"> {
+  let description = [{
+    An interface for memory operations that can carry access groups metadata.
+    It provides setters and getters for the operation's access groups attribute.
+    The default implementations of the interface methods expect the operation
+    to have an attribute of type ArrayAttr named access_groups.
+  }];
+
+  let cppNamespace = "::mlir::LLVM";
+  // TODO verify and clean up
+  //let verify = [{ return detail::verifyAccessGroupOpInterface($_op); }];
+
+  let methods = [
+    InterfaceMethod<[{
+      Get the array of argument attribute dictionaries. The method should return
+      an array attribute containing only dictionary attributes equal in number
+      to the number of function arguments. Alternatively, the method can return
+      null to indicate that the function has no argument attributes.
+    }],
+    "::mlir::ArrayAttr", "getArgAttrsAttr", (ins), [{}], [{
+      return this->getOperation()->template getAttrOfType<::mlir::ArrayAttr>(
+          getArgAttrsAttrName());
+    }]>,
+    InterfaceMethod<[{
+      Get the result attribute dictionary. The method should return
+      an array attribute containing only dictionary attributes equal in number
+      to the number of function results. Alternatively, the method can return
+      null to indicate that the function has no result attributes.
+    }],
+    "::mlir::DictionaryAttr", "getResAttrsAttr", (ins), [{}], [{
+      return this->getOperation()->template getAttrOfType<::mlir::DictionaryAttr>(
+          getResAttrsAttrName());
+    }]>,
+    InterfaceMethod<[{
+      Set the array of argument attribute dictionaries.
+    }],
+    "void", "setArgAttrsAttr", (ins "::mlir::ArrayAttr":$attrs), [{}], [{
+      this->getOperation()->setAttr(getArgAttrsAttrName(), attrs);
+    }]>,
+    InterfaceMethod<[{
+      Set the result attribute dictionary.
+    }],
+    "void", "setResAttrsAttr", (ins "::mlir::DictionaryAttr":$attrs), [{}], [{
+      this->getOperation()->setAttr(getResAttrsAttrName(), attrs);
+    }]>
+  ];
+}
+
 //===----------------------------------------------------------------------===//
 // LLVM dialect type interfaces.
 //===----------------------------------------------------------------------===//

@@ -621,6 +621,35 @@ void ModuleImport::setFastmathFlagsAttr(llvm::Instruction *inst,
   iface->setAttr(iface.getFastmathAttrName(), attr);
 }
 
+void ModuleImport::setParameterAttrAttrs(llvm::Instruction *inst,
+                                         ParameterAttrOpInterface iface) {
+  auto *call = cast<llvm::CallBase>(inst);
+
+  SmallVector<Attribute> argAttrs;
+  argAttrs.reserve(call->getNumOperands());
+
+  bool allEmpty = true;
+  auto llvmAttrs = call->getAttributes();
+  for (size_t i = 0, e = call->arg_size(); i < e; ++i) {
+    // Immediates are not modeled as operands in MLIR, so skip them.
+    if (call->paramHasAttr(i, llvm::Attribute::ImmArg))
+      continue;
+
+    llvm::AttributeSet llvmArgAttrs = llvmAttrs.getParamAttrs(i);
+    DictionaryAttr dict = convertParameterAttribute(llvmArgAttrs, builder);
+    allEmpty &= dict.empty();
+    argAttrs.push_back(dict);
+  }
+
+  if (!allEmpty)
+    iface.setArgAttrsAttr(builder.getArrayAttr(argAttrs));
+
+  llvm::AttributeSet llvmResAttr = llvmAttrs.getRetAttrs();
+  DictionaryAttr dict = convertParameterAttribute(llvmResAttr, builder);
+  if (!dict.empty())
+    iface.setResAttrsAttr(dict);
+}
+
 /// Returns if `type` is a scalar integer or floating-point type.
 static bool isScalarType(Type type) {
   return isa<IntegerType, FloatType>(type);
@@ -730,8 +759,8 @@ Attribute ModuleImport::getConstantAsAttr(llvm::Constant *constant) {
 
   // Returns the static shape of the provided type if possible.
   auto getConstantShape = [&](llvm::Type *type) {
-    return llvm::dyn_cast_if_present<ShapedType>(getBuiltinTypeForAttr(convertType(type))
-        );
+    return llvm::dyn_cast_if_present<ShapedType>(
+        getBuiltinTypeForAttr(convertType(type)));
   };
 
   // Convert one-dimensional constant arrays or vectors that store 1/2/4/8-byte
@@ -798,8 +827,8 @@ Attribute ModuleImport::getConstantAsAttr(llvm::Constant *constant) {
 
   // Convert zero aggregates.
   if (auto *constZero = dyn_cast<llvm::ConstantAggregateZero>(constant)) {
-    auto shape = llvm::dyn_cast_if_present<ShapedType>(getBuiltinTypeForAttr(convertType(constZero->getType()))
-                     );
+    auto shape = llvm::dyn_cast_if_present<ShapedType>(
+        getBuiltinTypeForAttr(convertType(constZero->getType())));
     if (!shape)
       return {};
     // Convert zero aggregates with a static shape to splat elements attributes.
@@ -1736,6 +1765,8 @@ LogicalResult ModuleImport::processBasicBlock(llvm::BasicBlock *bb,
     // during the import.
     if (Operation *op = lookupOperation(&inst)) {
       setNonDebugMetadataAttrs(&inst, op);
+      if (auto iface = dyn_cast<ParameterAttrOpInterface>(op))
+        setParameterAttrAttrs(&inst, iface);
     } else if (inst.getOpcode() != llvm::Instruction::PHI) {
       Location loc = debugImporter->translateLoc(inst.getDebugLoc());
       emitWarning(loc) << "dropped instruction: " << diag(inst);

@@ -380,10 +380,10 @@ define void @matrix_intrinsics(<64 x float> %vec1, <48 x float> %vec2, ptr %ptr,
   ; CHECK-SAME:  {columns = 16 : i32, rows = 3 : i32}
   %2 = call <48 x float> @llvm.matrix.transpose.v48f32(<48 x float> %vec2, i32 3, i32 16)
   ; CHECK:  %[[VAL1:.+]] = llvm.intr.matrix.column.major.load %[[PTR]], <stride = %[[STRIDE]]>
-  ; CHECK-SAME:  {columns = 16 : i32, isVolatile = false, rows = 3 : i32}
+  ; CHECK-SAME:  {columns = 16 : i32, isVolatile = false, llvm.arg_attrs = [{llvm.align = 4 : i64}, {}], rows = 3 : i32}
   %3 = call <48 x float> @llvm.matrix.column.major.load.v48f32.i64(ptr align 4 %ptr, i64 %stride, i1 false, i32 3, i32 16)
   ; CHECK:  llvm.intr.matrix.column.major.store %[[VAL1]], %[[PTR]], <stride = %[[STRIDE]]>
-  ; CHECK-SAME:  {columns = 16 : i32, isVolatile = true, rows = 3 : i32}
+  ; CHECK-SAME:  {columns = 16 : i32, isVolatile = true, llvm.arg_attrs = [{}, {llvm.align = 4 : i64}, {}], rows = 3 : i32}
   call void @llvm.matrix.column.major.store.v48f32.i64(<48 x float> %3, ptr align 4 %ptr, i64 %stride, i1 true, i32 3, i32 16)
   ret void
 }

@@ -19,6 +19,11 @@ namespace mlir {
 namespace LLVM {
 namespace detail {
 
+/// Names of the discardable parameter attributes used in the
+/// ParameterAttrOpInterface.
+constexpr StringRef getArgAttrsAttrName() { return "llvm.arg_attrs"; }
+constexpr StringRef getResAttrsAttrName() { return "llvm.res_attrs"; }
+
 /// Verifies the access groups attribute of memory operations that implement the
 /// access group interface.
 LogicalResult verifyAccessGroupOpInterface(Operation *op);

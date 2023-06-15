@@ -315,6 +315,7 @@ class LLVM_IntrOpBase<Dialect dialect, string opName, string enumName,
             [DeclareOpInterfaceMethods<AliasAnalysisOpInterface>], []),
         !if(!gt(requiresFastmath, 0),
             [DeclareOpInterfaceMethods<FastmathFlagsInterface>], []),
+            [DeclareOpInterfaceMethods<ParameterAttrOpInterface>],
         traits)>,
       LLVM_MemOpPatterns,
       Results<!if(!gt(numResults, 0), (outs LLVM_Type:$res), (outs))> {
@@ -391,9 +392,11 @@ class LLVM_IntrOp<string mnem, list<int> overloadedResults,
 class LLVM_ZeroResultIntrOp<string mnem, list<int> overloadedOperands = [],
                             list<Trait> traits = [],
                             bit requiresAccessGroup = 0,
-                            bit requiresAliasAnalysis = 0>
+                            bit requiresAliasAnalysis = 0,
+                            bit requiresParamAttrs = 0>
     : LLVM_IntrOp<mnem, [], overloadedOperands, traits, /*numResults=*/0,
-                  requiresAccessGroup, requiresAliasAnalysis>;
+                  requiresAccessGroup, requiresAliasAnalysis,
+                  /*requiresAliasAnalysis=*/0, requiresParamAttrs>;
 
 // Base class for LLVM intrinsic operations returning one result. Places the
 // intrinsic into the LLVM dialect and prefixes its name with "intr.". This is
