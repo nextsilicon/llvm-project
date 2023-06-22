@@ -558,16 +558,18 @@ LogicalResult ModuleImport::convertMetadata() {
 }
 
 LogicalResult ModuleImport::convertComdats() {
-  ComdatOp comdat = getGlobalComdatOp();
+  if (llvmModule->getComdatSymbolTable().empty())
+    return success();
+
+  ComdatOp comdatOp = getGlobalComdatOp();
   OpBuilder::InsertionGuard guard(builder);
-  builder.setInsertionPointToEnd(&comdat.getBody().back());
+  builder.setInsertionPointToEnd(&comdatOp.getBody().back());
   for (auto &kv : llvmModule->getComdatSymbolTable()) {
     StringRef name = kv.getKey();
-    llvm::Comdat::SelectionKind selector = kv.getValue().getSelectionKind();
+    llvm::Comdat::SelectionKind selectorKind = kv.getValue().getSelectionKind();
     builder.create<ComdatSelectorOp>(mlirModule.getLoc(), name,
-                                     convertComdatFromLLVM(selector));
+                                     convertComdatFromLLVM(selectorKind));
   }
-
   return success();
 }
 

@@ -1,4 +1,4 @@
-; RUN: mlir-translate -import-llvm %s | FileCheck %s
+; RUN: mlir-translate -import-llvm -split-input-file %s | FileCheck %s
 
 ; CHECK: llvm.mlir.global external @foo(42 : i64) comdat(@__llvm_global_comdat::@foo) {addr_space = 0 : i32} : i64
 @foo = global i64 42, comdat
@@ -18,3 +18,10 @@ $nodedup = comdat nodeduplicate
 $same = comdat samesize
 
 ; CHECK: }
+
+; // -----
+
+; CHECK-NOT: llvm.comdat
+; CHECK: llvm.mlir.global external @foobar
+; CHECK-NOT: llvm.comdat
+@foobar = global i64 42
