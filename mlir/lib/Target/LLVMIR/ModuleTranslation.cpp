@@ -725,6 +725,7 @@ LogicalResult ModuleTranslation::convertGlobals() {
                              : llvm::GlobalValue::NotThreadLocal,
         addrSpace);
 
+    // TODO add a mapping?!
     if (std::optional<mlir::SymbolRefAttr> comdat = op.getComdat()) {
       StringRef name = comdat->getLeafReference().getValue();
       if (!llvmModule->getComdatSymbolTable().contains(name))
